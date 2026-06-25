@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+**/node_modules/
+**/dist/
+**/.tsbuildinfo
+
+# Build outputs
+*.tsbuildinfo
+
+# OS / editor
+.DS_Store
+**/.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Test / coverage
+coverage/
+.nyc_output/
+
+# Vite
+**/.vite/
+
+# Disabled / quarantined test files are tracked (not ignored) so their state is visible

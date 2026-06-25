@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "jsx": "react-jsx",
+    "noEmit": true,
+    "paths": {
+      "@wt/shared": ["../shared/src"],
+      "@wt/shared/*": ["../shared/src/*"],
+      "@wt/engine": ["../engine/src"],
+      "@wt/engine/*": ["../engine/src/*"]
+    }
+  },
+  "include": ["src/**/*"]
+}

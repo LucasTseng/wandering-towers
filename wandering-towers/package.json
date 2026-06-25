@@ -1,0 +1,36 @@
+{
+  "name": "wandering-towers",
+  "version": "0.1.0",
+  "private": true,
+  "description": "《巫师飞塔 / The Wandering Towers》标准版 — 数字化可玩版本",
+  "license": "UNLICENSED",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @wt/client dev",
+    "build": "pnpm -r --stream run build",
+    "typecheck": "pnpm -r --stream run typecheck",
+    "lint": "eslint . --ext .ts,.tsx",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
+    "test": "vitest run",
+    "test:engine": "pnpm --filter @wt/engine test",
+    "test:watch": "vitest",
+    "replay:check": "pnpm --filter @wt/engine run replay:check",
+    "docker:build": "docker build -t wandering-towers .",
+    "docker:up": "docker compose up --build",
+    "docker:down": "docker compose down"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "cross-env": "^7.0.3",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.3.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  }
+}

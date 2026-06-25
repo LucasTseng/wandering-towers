@@ -1,0 +1,1008 @@
+
+《巫师飞塔》完整开发需求文档（V2）
+
+0. 文档定位
+
+本文档面向开发团队，目标是把《巫师飞塔》的规则抽象为可实现、可测试、可扩展的系统规格。
+覆盖范围包括：
+
+1. 游戏对象模型
+2. 状态机
+3. 行动与规则校验
+4. 药水/法术/终局逻辑
+5. 基础模式与扩展法术模式的统一配置
+6. 最小前后端接口建议
+7. 测试用例框架
+
+本文档以“规则引擎优先”的方式编写：
+即先定义状态，再定义动作，再定义动作如何改变状态。
+
+⸻
+
+1. 需求目标
+
+1.1 目标
+
+实现一个可运行的《巫师飞塔》游戏系统，至少支持：
+
+1. 基础游戏（Basic）
+2. 基础扩展法术模式（Custom Spell Setup）
+3. 为未来支持大师法师变体预留架构空间
+
+1.2 非目标
+
+本版本文档不要求：
+
+* AI 对战策略
+* 动画表现细节
+* 联机匹配系统
+* 用户账户系统
+* 扩展包内容
+
+⸻
+
+2. 模式规划
+
+2.1 支持的模式层级
+
+模式 1：BASIC
+
+* 基础游戏
+* 默认只使用 2 张法术
+* 当前玩家回合内施法
+* 每回合最多 1 次施法
+
+模式 2：CUSTOM
+
+* 仍沿用基础游戏的回合结构
+* 允许自定义法术池
+* 当前玩家回合内施法
+* 每回合最多 1 次施法（默认，可配置）
+
+模式 3：MASTER_VARIANT（预留）
+
+* 预留官方大师法师变体
+* 可能支持：
+    * 每个行动可施法
+    * 其他玩家响应施法
+    * 更复杂的时机窗口
+
+⸻
+
+3. 核心对象模型
+
+⸻
+
+4. 基础枚举定义
+
+type PlayerID = string
+type WizardID = string
+type TowerID = string
+type SpellID = string
+type CardID = string
+enum GameMode {
+  BASIC = "BASIC",
+  CUSTOM = "CUSTOM",
+  MASTER_VARIANT = "MASTER_VARIANT"
+}
+enum TurnPhase {
+  TURN_START = "TURN_START",
+  ACTION_1 = "ACTION_1",
+  ACTION_2 = "ACTION_2",
+  TURN_END = "TURN_END",
+  GAME_END_PENDING = "GAME_END_PENDING",
+  GAME_FINISHED = "GAME_FINISHED"
+}
+enum WizardStateType {
+  ON_GROUND = "ON_GROUND",
+  ON_TOWER_TOP = "ON_TOWER_TOP",
+  IMPRISONED = "IMPRISONED",
+  IN_CASTLE = "IN_CASTLE"
+}
+enum PotionState {
+  EMPTY = "EMPTY",
+  FULL = "FULL",
+  SPENT = "SPENT"
+}
+enum MovementCardType {
+  MOVE_WIZARD = "MOVE_WIZARD",
+  MOVE_TOWER = "MOVE_TOWER",
+  MOVE_WIZARD_OR_TOWER = "MOVE_WIZARD_OR_TOWER"
+}
+enum ActionSource {
+  MOVEMENT_CARD = "MOVEMENT_CARD",
+  SPELL = "SPELL",
+  DISCARD_REDRAW_TOWER_BONUS = "DISCARD_REDRAW_TOWER_BONUS"
+}
+
+⸻
+
+5. 棋盘与位置模型
+
+5.1 基础原则
+
+程序内部不要把棋盘只理解为“16 个平面格子”，因为：
+
+* 同一个位置可能有塔堆；
+* 乌鸦城堡可能在地面，也可能站在塔顶；
+* 某些判断是针对“位置顶层对象”的，而不是仅针对地面。
+
+因此建议使用Space + TowerStack + Top Occupancy的组合建模。
+
+5.2 SpaceState
+
+type SpaceState = {
+  index: number
+  groundHasRavenShield: boolean
+  setupCapacity: number          // 由火苗数决定
+  groundVisibleWizards: WizardID[]
+  towerStack: TowerID[]          // 自下而上 bottom -> top
+}
+
+说明：
+
+* setupCapacity 只用于开局摆巫师；
+* groundVisibleWizards 表示地面上当前可见的巫师；
+* 若该位置有塔，正常情况下巫师会站在塔顶而不是地面，但仍保留地面数组，便于统一处理“塔落下盖住地面巫师”的场景。
+
+5.3 BoardState
+
+type BoardState = {
+  spaces: SpaceState[]   // 固定长度 16
+}
+
+⸻
+
+6. 塔与塔堆模型
+
+6.1 TowerRuntimeState
+
+type TowerRuntimeState = {
+  id: TowerID
+  hasRavenShield: boolean
+  imprisonedWizards: WizardID[]
+}
+
+注意：
+
+* TowerRuntimeState 不直接保存所在空间与层级；
+* 塔的空间位置与层级由 board.spaces[x].towerStack 决定。
+
+6.2 塔堆切片规则
+
+当移动塔时，允许从某个塔堆中选择一座塔作为“切分起点”，将该塔及其上方所有塔一起移动。
+
+因此应提供如下基础能力：
+
+type TowerSlice = {
+  sourceSpaceIndex: number
+  movedTowerIds: TowerID[]   // 自下而上
+}
+
+并支持函数：
+
+extractTowerSlice(spaceIndex: number, pickedTowerId: TowerID): TowerSlice
+
+行为：
+
+* 找到 pickedTowerId 在该空间塔堆中的位置；
+* 将其及上方所有塔切出；
+* 下方塔保留原位。
+
+⸻
+
+7. 巫师模型
+
+type WizardState =
+  | { mode: "ON_GROUND"; spaceIndex: number }
+  | { mode: "ON_TOWER_TOP"; spaceIndex: number; topTowerId: TowerID }
+  | { mode: "IMPRISONED"; spaceIndex: number; insideTowerId: TowerID }
+  | { mode: "IN_CASTLE" }
+type WizardRuntime = {
+  id: WizardID
+  ownerPlayerId: PlayerID
+  state: WizardState
+}
+
+⸻
+
+8. 药水模型
+
+8.1 必须使用三态，不允许只用“空/满”二态
+
+type Potion = {
+  id: string
+  ownerPlayerId: PlayerID
+  state: PotionState
+}
+
+8.2 原因
+
+因为规则要求同时支持：
+
+* 空瓶 → 满瓶
+* 满瓶 → 施法后离场
+* 终局判定时“已施法消耗的瓶子也算已完成填满”
+
+如果只用空/满二态，无法正确表达“已消耗但仍计入终局条件”的状态。
+
+⸻
+
+9. 玩家状态
+
+type PlayerState = {
+  id: PlayerID
+  seatIndex: number
+  color: string
+  wizardIds: WizardID[]
+  potionIds: string[]
+  hand: CardID[]
+  spellsCastThisTurn: number
+}
+
+⸻
+
+10. 乌鸦城堡模型
+
+10.1 位置模型
+
+乌鸦城堡有两种存在形态：
+
+type RavenCastlePosition =
+  | { mode: "ON_SPACE"; spaceIndex: number }
+  | { mode: "ON_TOWER"; spaceIndex: number; topTowerId: TowerID }
+
+10.2 乌鸦城堡状态
+
+type RavenCastleState = {
+  position: RavenCastlePosition
+  wizardIdsInside: WizardID[]
+}
+
+⸻
+
+11. 移动牌模型
+
+type MovementCard = {
+  id: CardID
+  type: MovementCardType
+  moveValueMode: "FIXED" | "DICE"
+  fixedValue?: number
+  maxRerolls?: number   // 骰子牌可重掷次数
+}
+
+如果是固定数字牌：
+
+* moveValueMode = FIXED
+* fixedValue 为步数
+
+如果是骰子牌：
+
+* moveValueMode = DICE
+* maxRerolls 表示最多掷几次
+
+⸻
+
+12. 法术模型
+
+12.1 法术定义
+
+type SpellDefinition = {
+  id: SpellID
+  name: string
+  cost: number
+  effectType: string
+  params?: Record<string, any>
+}
+
+12.2 至少要支持的基础法术
+
+MOVE_WIZARD_1
+MOVE_TOWER_2
+
+12.3 可扩展法术池
+
+所有法术定义应维护在统一配置中，而不是写死在规则代码里。
+
+⸻
+
+13. 游戏配置模型
+
+type SpellSetupConfig = {
+  mode: GameMode
+  // 基础模式固定 2 张时可为空
+  selectedSpellIds?: SpellID[]
+  // 随机抽取法术时使用
+  spellPoolSource?: "ALL"
+  spellSelectionMode?: "FIXED" | "RANDOM"
+  spellCount?: number
+  // 施法规则
+  maxSpellsPerTurn: number
+  nonActivePlayersCanCast: boolean
+  castTimingMode: "ACTIVE_ONLY" | "REACTION_WINDOW"
+}
+type GameConfig = {
+  playerCount: number
+  mode: GameMode
+  spellSetup: SpellSetupConfig
+}
+
+⸻
+
+14. GameState 顶层结构
+
+type GameState = {
+  config: GameConfig
+  currentPlayerId: PlayerID
+  turnPhase: TurnPhase
+  roundNumber: number
+  board: BoardState
+  towers: Record<TowerID, TowerRuntimeState>
+  wizards: Record<WizardID, WizardRuntime>
+  potions: Record<string, Potion>
+  players: Record<PlayerID, PlayerState>
+  ravenCastle: RavenCastleState
+  drawPile: CardID[]
+  discardPile: CardID[]
+  availableSpells: SpellID[]
+  endgameTriggered: boolean
+  endgameTriggerPlayerId?: PlayerID
+  endgameTriggerRound?: number
+}
+
+⸻
+
+15. 初始化需求
+
+⸻
+
+16. 游戏初始化流程
+
+16.1 创建基础棋盘
+
+* 建立 16 个 SpaceState
+* 写入每个位置的：
+    * groundHasRavenShield
+    * setupCapacity
+
+16.2 放置乌鸦城堡
+
+初始化 ravenCastle.position
+
+16.3 放置 9 座塔
+
+按规则顺序将塔放入相应 SpaceState.towerStack
+
+16.4 创建玩家、巫师、药水
+
+根据人数创建：
+
+* 玩家
+* 巫师
+* 药水瓶（全部为 EMPTY）
+
+16.5 洗牌并发牌
+
+* 生成 90 张移动牌
+* 洗混
+* 每位玩家抽 3 张
+
+16.6 生成本局法术池
+
+根据 SpellSetupConfig：
+
+* BASIC：固定 2 张
+* CUSTOM：固定选定或随机抽取 N 张
+* MASTER_VARIANT：预留
+
+16.7 开局摆放巫师
+
+按顺时针轮流，每次放 1 名巫师到塔顶。
+规则：
+
+* 从乌鸦城堡右侧第一座塔开始
+* 按 setupCapacity 把当前塔位放满，再继续下一个塔位
+
+⸻
+
+17. 回合状态机
+
+⸻
+
+18. 基础回合流程
+
+TURN_START
+  -> ACTION_1
+  -> ACTION_2
+  -> TURN_END
+
+但若在 ACTION_1 / ACTION_2 / SPELL 中发生“巫师进入乌鸦城堡”，则：
+
+* 立即结算城堡移动
+* 跳转到 TURN_END
+
+⸻
+
+19. 每回合可选路径
+
+路径 A：正常两次行动
+
+* 在 ACTION_1 打出一张移动牌并结算
+* 在 ACTION_2 打出一张移动牌并结算
+
+路径 B：弃 3 重抽 + 可选移动塔 1 格
+
+如果玩家选择此路径：
+
+1. 弃掉手中 3 张牌
+2. 抽 3 张新牌
+3. 可选执行一次 moveTower(1) 奖励动作
+4. 直接进入 TURN_END
+
+此路径与正常打牌路径互斥。
+
+⸻
+
+20. 行动与 API 设计
+
+⸻
+
+21. 推荐 Action 列表
+
+21.1 选择弃牌重抽
+
+chooseDiscardRedraw(playerId)
+
+21.2 打出移动牌
+
+playMovementCard(
+  playerId: PlayerID,
+  cardId: CardID,
+  decision: PlayCardDecision
+)
+
+PlayCardDecision 至少应包含
+
+type PlayCardDecision = {
+  chosenMode?: "WIZARD" | "TOWER"   // 二选一牌需要
+  resolvedMoveValue?: number        // 骰子牌结算后步数
+  wizardId?: WizardID
+  towerSourceSpaceIndex?: number
+  pickedTowerId?: TowerID
+}
+
+21.3 施法
+
+castSpell(
+  playerId: PlayerID,
+  spellId: SpellID,
+  targetDecision: SpellTargetDecision
+)
+
+21.4 结束回合
+
+endTurn()
+
+⸻
+
+22. 巫师移动规则引擎
+
+⸻
+
+23. 巫师移动函数建议
+
+moveWizardExact(
+  playerId: PlayerID,
+  wizardId: WizardID,
+  steps: number,
+  source: ActionSource
+): MoveWizardResult
+
+23.1 校验项
+
+1. wizardId 是否存在
+2. 巫师是否为合法目标：
+    * 普通巫师牌：必须是当前玩家自己的可见巫师
+    * 某些法术：可根据法术规则放宽
+3. steps > 0
+4. 移动方向按顺时针计算
+5. 必须完整走完步数
+6. 目标落点是否超过 6 名可见巫师上限
+
+23.2 结算逻辑
+
+情况 A：落点不是乌鸦城堡
+
+* 若目标位置无塔：巫师进入 ON_GROUND
+* 若目标位置有塔：巫师进入 ON_TOWER_TOP
+
+情况 B：落点正好是乌鸦城堡
+
+1. 将巫师状态改为 IN_CASTLE
+2. 放入 ravenCastle.wizardIdsInside
+3. 调用 advanceRavenCastleAfterWizardEntered()
+4. 标记当前回合提前结束
+
+⸻
+
+24. 塔移动规则引擎
+
+⸻
+
+25. 塔移动函数建议
+
+moveTowerSegment(
+  playerId: PlayerID,
+  sourceSpaceIndex: number,
+  pickedTowerId: TowerID,
+  steps: number,
+  source: ActionSource
+): MoveTowerResult
+
+25.1 基本流程
+
+1. 校验 pickedTowerId 是否位于 sourceSpaceIndex
+2. 从塔堆中切出 pickedTowerId 及其上方所有塔
+3. 计算目标位置
+4. 判断是否会“把塔压到乌鸦城堡上”
+5. 将切出的塔堆落到目标位置
+6. 携带塔上的内容物一起移动
+7. 若目标位置已有塔，则叠到塔堆顶部
+8. 处理封印
+9. 返回结果
+
+25.2 携带内容物规则
+
+若被移动的塔切片上：
+
+* 顶部站着巫师
+* 内部封印着巫师
+* 乌鸦城堡站在该塔切片上
+
+则它们都应随塔切片移动。
+
+⸻
+
+26. 封印结算逻辑
+
+26.1 封印判定时机
+
+在塔切片落到目标位置后，检查该目标位置是否存在被新覆盖的可见巫师。
+
+26.2 可被封印的对象
+
+* 目标位置地面上的可见巫师
+* 目标位置原塔堆顶上的可见巫师
+
+26.3 封印处理
+
+对于每个被封印巫师：
+
+1. 更新其状态为 IMPRISONED
+2. 将其加入“负责封印它的那座塔”的 imprisonedWizards
+
+26.4 药水奖励
+
+如果本次封印数量 >= 1：
+
+* 当前玩家若存在 EMPTY 药水瓶：
+    * 任选 / 自动选择 1 个 EMPTY -> FULL
+
+⸻
+
+27. 解封逻辑
+
+当某座塔被移动走时，如果其内部封印的巫师因此暴露出来，则需要解封。
+
+27.1 解封结果
+
+被解封巫师应重新变为可见巫师。
+其位置通常是：
+
+* 若上方还有塔，则在新的顶层逻辑位置上
+* 若没有塔，则回到该位置地面
+
+为了避免实现歧义，推荐在塔堆移动时做统一的“空间重新构建”：
+
+1. 先移走塔切片；
+2. 重建源空间的塔堆与顶部可见对象；
+3. 再处理解封后巫师的可见位置。
+
+⸻
+
+28. 乌鸦城堡移动函数
+
+advanceRavenCastleAfterWizardEntered(): void
+
+28.1 查找逻辑
+
+从当前乌鸦城堡位置开始，沿顺时针查找下一个合法乌鸦纹章位置。
+
+28.2 合法位置判定
+
+候选位置必须：
+
+1. 是乌鸦纹章位置
+2. 顶层没有可见巫师
+
+注意：
+
+* 若塔内封印着巫师，但塔顶没人，则仍视为合法
+
+28.3 找不到时
+
+乌鸦城堡不移动。
+
+⸻
+
+29. 药水与法术系统
+
+⸻
+
+30. 药水状态机
+
+30.1 合法状态转换
+
+EMPTY -> FULL -> SPENT
+
+30.2 不允许的转换
+
+* SPENT -> EMPTY
+* SPENT -> FULL
+* FULL -> EMPTY
+
+除非未来扩展法术明确引入“回复药水”的新规则，否则基础系统禁止这些逆向变化。
+
+⸻
+
+31. 施法函数
+
+castSpell(
+  playerId: PlayerID,
+  spellId: SpellID,
+  targetDecision: SpellTargetDecision
+): CastSpellResult
+
+31.1 校验项
+
+1. 当前模式是否允许此时施法
+2. 当前玩家本回合施法次数是否已达上限
+3. 玩家是否拥有足够数量的 FULL 药水瓶
+4. 法术目标是否合法
+
+31.2 支付逻辑
+
+* 从玩家的 FULL 药水瓶中扣除 cost 个
+* 改为 SPENT
+
+31.3 结算逻辑
+
+根据法术定义执行相应效果。
+
+⸻
+
+32. 基础法术最小实现
+
+32.1 MOVE_WIZARD_1
+
+* 目标：法术允许的巫师
+* 效果：前进 1 格
+* 实现方式：直接复用 moveWizardExact(..., 1, SPELL)
+
+32.2 MOVE_TOWER_2
+
+* 目标：法术允许的塔
+* 效果：前进 2 格
+* 实现方式：直接复用 moveTowerSegment(..., 2, SPELL)
+
+⸻
+
+33. 终局与胜负判定
+
+⸻
+
+34. 终局判定函数
+
+checkEndgameTrigger(playerId: PlayerID): boolean
+
+34.1 终局条件
+
+玩家满足终局条件，当且仅当：
+
+条件 1：所有巫师都在乌鸦城堡
+
+allPlayerWizardsInCastle(playerId) === true
+
+条件 2：没有空药水瓶
+
+countPotions(playerId, EMPTY) === 0
+
+34.2 等价表达
+
+也可写成：
+
+count(FULL) + count(SPENT) == initialPotionCount
+
+⸻
+
+35. 终局触发后的流程
+
+35.1 触发
+
+当某位玩家首次满足终局条件时：
+
+* endgameTriggered = true
+* 记录 endgameTriggerPlayerId
+* 记录触发所在轮次
+
+35.2 不立即结束
+
+继续打完当前轮，使所有玩家拥有相同回合数。
+
+35.3 最终结算
+
+当本轮结束后：
+
+1. 找出所有满足终局条件的玩家
+2. 若只有 1 人，则直接获胜
+3. 若多人满足，则比较：
+    * FULL 数量（未花掉的满瓶）
+4. 若仍相同，则并列胜利
+
+⸻
+
+36. 非法动作与返回码建议
+
+建议统一返回 RuleErrorCode：
+
+enum RuleErrorCode {
+  NOT_CURRENT_PLAYER,
+  INVALID_PHASE,
+  CARD_NOT_IN_HAND,
+  INVALID_WIZARD_TARGET,
+  INVALID_TOWER_TARGET,
+  INVALID_MOVE_VALUE,
+  NO_LEGAL_TARGET,
+  TARGET_CAPACITY_EXCEEDED,
+  TOWER_CANNOT_LAND_ON_CASTLE,
+  SPELL_LIMIT_REACHED,
+  NOT_ENOUGH_FULL_POTIONS,
+  INVALID_SPELL_TARGET
+}
+
+⸻
+
+37. 关键边界规则（必须实现）
+
+37.1 无合法目标的牌仍然弃掉
+
+若打出的移动牌没有任何合法目标：
+
+* 牌进入弃牌堆
+* 本次行动无效果
+* 回合继续
+
+37.2 巫师进入乌鸦城堡会立即结束回合
+
+无论这是：
+
+* 第 1 次行动
+* 第 2 次行动
+* 法术导致
+
+只要有巫师进入乌鸦城堡，当前玩家回合立刻结束。
+
+37.3 弃 3 重抽的塔移动是可选的
+
+重抽后允许移动 1 座塔 1 格，但不强制。
+
+37.4 封印多个巫师只奖励 1 瓶
+
+每次封印结算最多只翻 1 个空瓶。
+
+37.5 药水不会回收再利用
+
+已 SPENT 的药水瓶不能再被装满。
+
+37.6 塔不能压到乌鸦城堡上
+
+但乌鸦城堡可以跟着它所在的塔一起移动。
+
+⸻
+
+38. 服务端建议的最小接口
+
+38.1 获取当前局面
+
+GET /game/{gameId}/state
+
+38.2 打移动牌
+
+POST /game/{gameId}/play-card
+
+请求体示例：
+
+{
+  "playerId": "P1",
+  "cardId": "C12",
+  "decision": {
+    "chosenMode": "TOWER",
+    "resolvedMoveValue": 3,
+    "towerSourceSpaceIndex": 7,
+    "pickedTowerId": "T5"
+  }
+}
+
+38.3 弃牌重抽
+
+POST /game/{gameId}/discard-redraw
+
+38.4 施法
+
+POST /game/{gameId}/cast-spell
+
+38.5 结束回合
+
+POST /game/{gameId}/end-turn
+
+⸻
+
+39. 前端展示建议
+
+⸻
+
+40. 前端必须展示的对象
+
+40.1 棋盘层
+
+* 16 个位置
+* 每个位置的火苗数量（开局容量信息）
+* 乌鸦纹章位置
+* 乌鸦城堡位置
+
+40.2 塔层
+
+* 每个位置的塔堆顺序
+* 哪些塔带乌鸦纹章
+
+40.3 巫师层
+
+* 可见巫师的颜色与位置
+* 已进城堡的巫师数量
+* 是否需要隐藏被封印巫师的具体层级，取决于产品决定
+
+40.4 药水层
+
+* 每位玩家：
+    * 空瓶数量
+    * 满瓶数量
+    * 已用掉数量（可不直接展示，但系统需维护）
+
+⸻
+
+41. 测试用例清单（首批）
+
+⸻
+
+42. 初始化测试
+
+1. 2/3/4/5/6 人时，巫师与药水数量是否正确
+2. 9 座塔是否按正确顺序放置
+3. 开局巫师是否按火苗容量正确放置
+4. 每位玩家是否发到 3 张手牌
+5. BASIC 模式是否只启用 2 张法术
+
+⸻
+
+43. 巫师移动测试
+
+1. 巫师从地面移动到空地
+2. 巫师从地面移动到有塔位置，应落到塔顶
+3. 巫师从塔顶移动到空地
+4. 巫师精确步数进入乌鸦城堡
+5. 巫师步数超过城堡，不得中途进城堡
+6. 被封印巫师不能作为普通巫师移动目标
+7. 落点超过 6 名可见巫师时报错
+
+⸻
+
+44. 塔移动测试
+
+1. 单塔移动到空位
+2. 单塔移动到已有塔位置并叠塔
+3. 从三层塔堆中只移动顶塔
+4. 从三层塔堆中移动中间塔及其上方部分
+5. 移动整叠塔
+6. 乌鸦城堡在被移动塔上时应随塔移动
+7. 塔不能移动到乌鸦城堡所在位置压住城堡
+
+⸻
+
+45. 封印/解封测试
+
+1. 塔盖住地面巫师 → 巫师被封印
+2. 塔盖住塔顶巫师 → 巫师被封印
+3. 一次封印多个巫师，只翻 1 瓶
+4. 封印自己巫师也能翻 1 瓶
+5. 没有空瓶时封印，不再获得奖励
+6. 移走封印塔后，巫师正确解封
+
+⸻
+
+46. 药水测试
+
+1. 空瓶可翻为满瓶
+2. 满瓶可被施法消耗成 SPENT
+3. SPENT 不会回到 EMPTY
+4. 玩家初始 5 瓶时，本局最多只能累计得到 5 次“满瓶完成”
+5. 终局时 FULL + SPENT == 初始瓶数 才算药水目标达成
+
+⸻
+
+47. 法术测试
+
+1. BASIC 模式每回合最多施法 1 次
+2. 没有足够满瓶时不能施法
+3. MOVE_WIZARD_1 正常移动 1 格
+4. MOVE_TOWER_2 正常移动 2 格并可触发封印
+5. 施法导致巫师进城堡时应立即结束回合
+
+⸻
+
+48. 终局测试
+
+1. 所有巫师进城堡但仍有空瓶 → 不触发终局
+2. 没有空瓶但仍有巫师未进城堡 → 不触发终局
+3. 同时满足两条件 → 触发终局
+4. 终局后继续打完当前轮
+5. 多人同轮达成时比较 FULL 数量
+6. 若 FULL 数量相同则并列胜利
+
+⸻
+
+49. 推荐的开发顺序
+
+阶段 1：基础规则内核
+
+* 棋盘与对象模型
+* 初始化
+* 巫师移动
+* 塔移动
+* 封印 / 解封
+* 乌鸦城堡移动
+* 基础终局判定
+
+阶段 2：药水与基础法术
+
+* EMPTY / FULL / SPENT 三态
+* 基础两张法术
+* 每回合施法限制
+* 终局比较逻辑
+
+阶段 3：扩展法术模式
+
+* 法术池配置
+* 指定 / 随机 N 张法术
+* UI 适配
+
+阶段 4：大师法师变体预研
+
+* 反应式施法窗口
+* 每行动施法
+* 非当前玩家响应
+
+⸻
+
+50. 最终开发结论
+
+本项目的规则内核应当建立在以下 8 条不可动摇的基础上：
+
+1. 开局巫师容量以道路位置火苗数为准，不要把 3/2/1 写死成唯一规则。
+2. 药水必须使用三态模型：EMPTY / FULL / SPENT。
+3. 终局药水条件 = 没有空瓶，不是“桌面当前全满”。
+4. 药水使用后直接回盒，不会循环复用。
+5. 封印多个巫师只奖励 1 个空瓶翻满。
+6. 巫师进入乌鸦城堡会立即结束当前玩家回合。
+7. 塔不能压乌鸦城堡，但城堡可以跟着它所在的塔一起移动。
+8. 法术系统必须做成可配置，不要把“只有 2 张法术”写死到引擎层。
+

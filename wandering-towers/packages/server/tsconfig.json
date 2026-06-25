@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "paths": {
+      "@wt/shared": ["../shared/src"],
+      "@wt/shared/*": ["../shared/src/*"],
+      "@wt/engine": ["../engine/src"],
+      "@wt/engine/*": ["../engine/src/*"]
+    }
+  },
+  "include": ["src/**/*"]
+}

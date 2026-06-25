@@ -1,0 +1,494 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import { RuleEngine } from '../src/rule-engine';
+import { buildInitialState } from '../src/state/state-builder';
+import type { GameConfig } from '../../../shared/src/types';
+import { basicConfig as baseConfig } from './fixtures';
+import { RuleErrorCode } from '../../../shared/src/enums/rule-error-code';
+import { getPlayer, getWizard, getPotionsByState, getTower } from '../src/state/selectors';
+import { RuleError } from '../src/rule-error';
+import { applyEvent } from '../src/state/apply-event';
+import type { GameState } from '../../../shared/src/types';
+// This import will automatically register all spell implementations
+import '../src/rules/spells/spell-registry';
+
+describe('castSpell', () => {
+  let engine: RuleEngine;
+  let state: GameState;
+  const P1 = 'P1';
+
+  beforeEach(() => {
+    const config: GameConfig = {
+      ...baseConfig,
+      playerCount: 2,
+      spellSetup: {
+        ...baseConfig.spellSetup,
+        mode: 'FIXED', // Align with new modes
+        selectedSpellIds: ['MOVE_WIZARD_1', 'MOVE_TOWER_2', 'FREE_A_WIZARD', 'MOVE_RAVEN_CASTLE', 'SWAP_TWO_TOWERS', 'DRAW_CARD', 'REUSE_LAST_CARD'],
+        maxSpellsPerTurn: 1, // As per TC-SPELL-001
+      },
+    };
+    state = buildInitialState(config, 'test-seed');
+    engine = new RuleEngine(state);
+  });
+
+  it('TC-SPELL-004 (MOVE_WIZARD_1): should throw NOT_ENOUGH_FULL_POTIONS if player has no full potions', () => {
+    expect(getPotionsByState(state, P1, 'FULL').length).toBe(0);
+
+    const wizard = getWizard(state, getPlayer(state, P1).wizardIds[0]);
+    const fromIndex = wizard.position.spaceIndex;
+    const toIndex = (fromIndex + 1) % state.board.spaces.length;
+
+    const command = {
+      type: 'CAST_SPELL',
+      playerId: P1,
+      payload: {
+        spellId: 'MOVE_WIZARD_1',
+        targetDecision: { wizardId: wizard.id, spaceIndex: toIndex },
+      },
+    };
+
+    expect(() => engine.execute(command as any)).toThrow(
+      new RuleError(RuleErrorCode.NOT_ENOUGH_FULL_POTIONS),
+    );
+  });
+
+  it('TC-SPELL-001 (MOVE_WIZARD_1): should throw SPELL_LIMIT_REACHED on second cast in the same turn', () => {
+    // Give player 2 full potions
+    const potionsToFill = getPotionsByState(state, P1, 'EMPTY').slice(0, 2);
+    potionsToFill.forEach(p => {
+      applyEvent(state, { type: 'POTION_FILLED', payload: { playerId: P1, potionId: p.id, from: 'EMPTY', to: 'FULL', reason: 'TEST' } });
+    });
+    
+    const wizard = getWizard(state, getPlayer(state, P1).wizardIds[0]);
+    const fromIndex = wizard.position.spaceIndex;
+    const toIndex = (fromIndex + 1) % state.board.spaces.length;
+
+    const engineForFirstCast = new RuleEngine(state);
+    const command = {
+      type: 'CAST_SPELL',
+      playerId: P1,
+      payload: {
+        spellId: 'MOVE_WIZARD_1',
+        targetDecision: { wizardId: wizard.id, spaceIndex: toIndex },
+      },
+    };
+
+    // First cast should succeed
+    const result1 = engineForFirstCast.execute(command as any);
+    expect(result1.success).toBe(true);
+
+    // Apply events to get the new state for the second cast
+    const stateAfterFirstCast = JSON.parse(JSON.stringify(state));
+    result1.events.forEach(event => {
+      applyEvent(stateAfterFirstCast, event);
+    });
+    
+    expect(getPlayer(stateAfterFirstCast, P1).spellsCastThisTurn).toBe(1);
+
+    // Second cast should fail
+    const engineForSecondCast = new RuleEngine(stateAfterFirstCast);
+    expect(() => engineForSecondCast.execute(command as any)).toThrow(
+      new RuleError(RuleErrorCode.SPELL_LIMIT_REACHED),
+    );
+  });
+
+  it('TC-SPELL-002 & 003 (MOVE_WIZARD_1): should allow casting in ACTION_1 and ACTION_2 phases', () => {
+    const potionToFill = getPotionsByState(state, P1, 'EMPTY')[0];
+    applyEvent(state, { type: 'POTION_FILLED', payload: { playerId: P1, potionId: potionToFill.id, from: 'EMPTY', to: 'FULL', reason: 'TEST' } });
+    
+    const wizard = getWizard(state, getPlayer(state, P1).wizardIds[0]);
+    const fromIndex = wizard.position.spaceIndex;
+    const toIndex = (fromIndex + 1) % state.board.spaces.length;
+
+    const command = {
+      type: 'CAST_SPELL',
+      playerId: P1,
+      payload: {
+        spellId: 'MOVE_WIZARD_1',
+        targetDecision: { wizardId: wizard.id, spaceIndex: toIndex },
+      },
+    };
+
+    // Test in ACTION_1
+    state.turnPhase = 'ACTION_1';
+    const engine1 = new RuleEngine(state);
+    const result1 = engine1.execute(command as any);
+    expect(result1.success).toBe(true);
+    expect(result1.events.some(e => e.type === 'SPELL_CAST')).toBe(true);
+
+    // Test in ACTION_2
+    state.turnPhase = 'ACTION_2';
+    getPlayer(state, P1).spellsCastThisTurn = 0; // Reset for this part of the test
+    const engine2 = new RuleEngine(state);
+    const result2 = engine2.execute(command as any);
+    expect(result2.success).toBe(true);
+    expect(result2.events.some(e => e.type === 'SPELL_CAST')).toBe(true);
+  });
+
+  it('TC-SPELL-005 (MOVE_WIZARD_1): should successfully cast and emit WIZARD_MOVED', () => {
+    const potionToFill = getPotionsByState(state, P1, 'EMPTY')[0];
+    applyEvent(state, { type: 'POTION_FILLED', payload: { playerId: P1, potionId: potionToFill.id, from: 'EMPTY', to: 'FULL', reason: 'TEST' } });
+    
+    const wizard = getWizard(state, getPlayer(state, P1).wizardIds[0]);
+    const fromIndex = wizard.position.spaceIndex;
+    const toIndex = (fromIndex + 1) % state.board.spaces.length;
+
+    const engine = new RuleEngine(state);
+    const command = {
+      type: 'CAST_SPELL',
+      playerId: P1,
+      payload: { spellId: 'MOVE_WIZARD_1', targetDecision: { wizardId: wizard.id, spaceIndex: toIndex } },
+    };
+
+    const result = engine.execute(command as any);
+
+    expect(result.success).toBe(true);
+    const wizardMovedEvent = result.events.find(e => e.type === 'WIZARD_MOVED');
+    expect(wizardMovedEvent).toBeDefined();
+    expect(wizardMovedEvent?.payload.wizardId).toBe(wizard.id);
+    expect(wizardMovedEvent?.payload.to.spaceIndex).toBe(toIndex);
+  });
+
+  it('TC-SPELL-006 (MOVE_TOWER_2): should successfully cast and emit TOWER_MOVED', () => {
+    // Give player 2 full potions for the cost of MOVE_TOWER_2
+    const potionsToFill = getPotionsByState(state, P1, 'EMPTY').slice(0, 2);
+    potionsToFill.forEach(p => {
+      applyEvent(state, { type: 'POTION_FILLED', payload: { playerId: P1, potionId: p.id, from: 'EMPTY', to: 'FULL', reason: 'TEST' } });
+    });
+
+    const movableTower = Object.values(state.towers).find(t => !t.isRavenTower)!;
+
+    const engine = new RuleEngine(state);
+    const command = {
+      type: 'CAST_SPELL',
+      playerId: P1,
+      payload: { spellId: 'MOVE_TOWER_2', targetDecision: { towerId: movableTower.id, steps: 2 } },
+    };
+
+    const result = engine.execute(command as any);
+
+    expect(result.success).toBe(true);
+    const towerMovedEvent = result.events.find(e => e.type === 'TOWER_MOVED');
+    expect(towerMovedEvent).toBeDefined();
+    expect(towerMovedEvent?.payload.towerId).toBe(movableTower.id);
+    expect(towerMovedEvent?.payload.steps).toBe(2);
+  });
+
+  it('(MOVE_TOWER_2): should throw error when trying to move the Raven Tower', () => {
+    const potionsToFill = getPotionsByState(state, P1, 'EMPTY').slice(0, 2);
+    potionsToFill.forEach(p => {
+      applyEvent(state, { type: 'POTION_FILLED', payload: { playerId: P1, potionId: p.id, from: 'EMPTY', to: 'FULL', reason: 'TEST' } });
+    });
+
+    const ravenTower = Object.values(state.towers).find(t => t.isRavenTower)!;
+
+    const command = {
+      type: 'CAST_SPELL',
+      playerId: P1,
+      payload: { spellId: 'MOVE_TOWER_2', targetDecision: { towerId: ravenTower.id, steps: 1 } },
+    };
+
+    expect(() => engine.execute(command as any)).toThrow(
+      new RuleError(RuleErrorCode.INVALID_SPELL_TARGET, 'Cannot move the Raven Tower with this spell.'),
+    );
+  });
+
+  it('(MOVE_TOWER_2): should throw error for invalid steps', () => {
+    const potionsToFill = getPotionsByState(state, P1, 'EMPTY').slice(0, 2);
+    potionsToFill.forEach(p => {
+      applyEvent(state, { type: 'POTION_FILLED', payload: { playerId: P1, potionId: p.id, from: 'EMPTY', to: 'FULL', reason: 'TEST' } });
+    });
+
+    const movableTower = Object.values(state.towers).find(t => !t.isRavenTower)!;
+
+    const command = {
+      type: 'CAST_SPELL',
+      playerId: P1,
+      payload: { spellId: 'MOVE_TOWER_2', targetDecision: { towerId: movableTower.id, steps: 3 } },
+    };
+
+    expect(() => engine.execute(command as any)).toThrow(
+      new RuleError(RuleErrorCode.INVALID_SPELL_TARGET, 'Can only move a tower 1 or 2 steps with this spell.'),
+    );
+  });
+});
+
+describe('Spell Setup Modes (T2.4)', () => {
+  it('TC-INIT-006: should have 2 default spells in BASIC mode', () => {
+    const config: GameConfig = {
+      ...baseConfig,
+      playerCount: 2,
+      spellSetup: {
+        ...baseConfig.spellSetup,
+        mode: 'BASIC',
+      },
+    };
+    const state = buildInitialState(config, 'test-seed');
+    expect(state.availableSpells).toHaveLength(2);
+    expect(state.availableSpells).toEqual(expect.arrayContaining(['MOVE_WIZARD_1', 'MOVE_TOWER_2']));
+  });
+
+  it('TC-INIT-007: should have specified spells in FIXED mode', () => {
+    const selectedSpells = ['DRAW_CARD', 'SWAP_TWO_TOWERS'];
+    const config: GameConfig = {
+      ...baseConfig,
+      playerCount: 2,
+      spellSetup: {
+        ...baseConfig.spellSetup,
+        mode: 'FIXED',
+        selectedSpellIds: selectedSpells,
+      },
+    };
+    const state = buildInitialState(config, 'test-seed');
+    expect(state.availableSpells).toHaveLength(2);
+    expect(state.availableSpells).toEqual(expect.arrayContaining(selectedSpells));
+  });
+
+  it('TC-INIT-008: should have N random spells in RANDOM mode', () => {
+    const spellCount = 4;
+    const config: GameConfig = {
+      ...baseConfig,
+      playerCount: 2,
+      spellSetup: {
+        ...baseConfig.spellSetup,
+        mode: 'RANDOM',
+        spellCount: spellCount,
+      },
+    };
+    const state = buildInitialState(config, 'test-seed');
+    expect(state.availableSpells).toHaveLength(spellCount);
+    // Check if all selected spells are from the standard pool
+    expect(state.availableSpells.every(id => ['MOVE_WIZARD_1', 'MOVE_TOWER_2', 'FREE_A_WIZARD', 'MOVE_RAVEN_CASTLE', 'SWAP_TWO_TOWERS', 'DRAW_CARD', 'REUSE_LAST_CARD'].includes(id))).toBe(true);
+  });
+});
+
+describe('Spell: MOVE_RAVEN_CASTLE', () => {
+  let state: GameState;
+  const P1 = 'P1';
+
+  beforeEach(() => {
+    const config: GameConfig = {
+      ...baseConfig,
+      playerCount: 1,
+      spellSetup: { ...baseConfig.spellSetup, mode: 'FIXED', selectedSpellIds: ['MOVE_RAVEN_CASTLE'] },
+    };
+    state = buildInitialState(config, 'test-seed');
+  });
+
+  it('should successfully move the raven castle', () => {
+    // Setup: Give player 1 potion (cost is 1)
+    applyEvent(state, { type: 'POTION_FILLED', payload: { playerId: P1, potionId: getPlayer(state, P1).potionIds[0], from: 'EMPTY', to: 'FULL', reason: 'TEST' } });
+    const engine = new RuleEngine(state);
+    const ravenTower = Object.values(state.towers).find(t => t.isRavenTower)!;
+
+    const command = {
+      type: 'CAST_SPELL',
+      playerId: P1,
+      payload: { spellId: 'MOVE_RAVEN_CASTLE', targetDecision: {} },
+    };
+
+    const result = engine.execute(command as any);
+
+    expect(result.success).toBe(true);
+    const towerMovedEvent = result.events.find(e => e.type === 'TOWER_MOVED');
+    expect(towerMovedEvent).toBeDefined();
+    expect(towerMovedEvent?.payload.towerId).toBe(ravenTower.id);
+    expect(towerMovedEvent?.payload.steps).toBe(1);
+  });
+
+  it('should fail if player does not have enough potions', () => {
+    const engine = new RuleEngine(state);
+    const command = {
+      type: 'CAST_SPELL',
+      playerId: P1,
+      payload: { spellId: 'MOVE_RAVEN_CASTLE', targetDecision: {} },
+    };
+
+    expect(() => engine.execute(command as any)).toThrow(
+      new RuleError(RuleErrorCode.NOT_ENOUGH_FULL_POTIONS)
+    );
+  });
+});
+
+describe('Spell: SWAP_TWO_TOWERS', () => {
+  let state: GameState;
+  const P1 = 'P1';
+
+  beforeEach(() => {
+    const config: GameConfig = {
+      ...baseConfig,
+      playerCount: 1,
+      spellSetup: { ...baseConfig.spellSetup, mode: 'FIXED', selectedSpellIds: ['SWAP_TWO_TOWERS'] },
+    };
+    state = buildInitialState(config, 'test-seed');
+    // Setup: Give player 1 potion (cost is 1)
+    applyEvent(state, { type: 'POTION_FILLED', payload: { playerId: P1, potionId: getPlayer(state, P1).potionIds[0], from: 'EMPTY', to: 'FULL', reason: 'TEST' } });
+  });
+
+  it('should successfully swap two tower stacks', () => {
+    // Setup: Ensure there are towers on space 1 and 3
+    const tower1 = getTower(state, 'T1');
+    const tower2 = getTower(state, 'T2');
+    tower1.spaceIndex = 1;
+    tower2.spaceIndex = 3;
+
+    const engine = new RuleEngine(state);
+    const command = {
+      type: 'CAST_SPELL',
+      playerId: P1,
+      payload: { spellId: 'SWAP_TWO_TOWERS', targetDecision: { spaceIndex1: 1, spaceIndex2: 3 } },
+    };
+
+    const result = engine.execute(command as any);
+    expect(result.success).toBe(true);
+    const swapEvent = result.events.find(e => e.type === 'TOWER_STACKS_SWAPPED');
+    expect(swapEvent).toBeDefined();
+    expect(swapEvent?.payload).toEqual({ spaceIndex1: 1, spaceIndex2: 3, source: 'SPELL' });
+  });
+
+  it('should fail if one of the spaces has no towers', () => {
+    const tower1 = getTower(state, 'T1');
+    tower1.spaceIndex = 1; // Space 2 is empty
+
+    const engine = new RuleEngine(state);
+    const command = {
+      type: 'CAST_SPELL',
+      playerId: P1,
+      payload: { spellId: 'SWAP_TWO_TOWERS', targetDecision: { spaceIndex1: 1, spaceIndex2: 2 } },
+    };
+
+    expect(() => engine.execute(command as any)).toThrow(
+      new RuleError(RuleErrorCode.INVALID_SPELL_TARGET, 'Both selected spaces must have towers.')
+    );
+  });
+});
+
+describe('Spell: DRAW_CARD', () => {
+  let state: GameState;
+  const P1 = 'P1';
+
+  beforeEach(() => {
+    const config: GameConfig = {
+      ...baseConfig,
+      playerCount: 1,
+      spellSetup: { ...baseConfig.spellSetup, mode: 'FIXED', selectedSpellIds: ['DRAW_CARD'] },
+    };
+    state = buildInitialState(config, 'test-seed');
+    // Give player 1 potion
+    applyEvent(state, { type: 'POTION_FILLED', payload: { playerId: P1, potionId: getPlayer(state, P1).potionIds[0], from: 'EMPTY', to: 'FULL', reason: 'TEST' } });
+  });
+
+  it('should successfully draw a card from the draw pile', () => {
+    const engine = new RuleEngine(state);
+    const initialHandSize = getPlayer(state, P1).cardIds.length;
+    const command = {
+      type: 'CAST_SPELL',
+      playerId: P1,
+      payload: { spellId: 'DRAW_CARD', targetDecision: {} },
+    };
+
+    const result = engine.execute(command as any);
+    expect(result.success).toBe(true);
+    const drawEvent = result.events.find(e => e.type === 'CARDS_DRAWN');
+    expect(drawEvent).toBeDefined();
+    expect(drawEvent?.payload.cardIds).toHaveLength(1);
+
+    const finalState = result.events.reduce(applyEvent, state);
+    expect(getPlayer(finalState, P1).cardIds.length).toBe(initialHandSize + 1);
+  });
+
+  it('should reshuffle and draw if draw pile is empty', () => {
+    // Setup: Empty the draw pile and move cards to discard
+    state.discardPile.push(...state.drawPile);
+    state.drawPile = [];
+    expect(state.drawPile).toHaveLength(0);
+    expect(state.discardPile.length).toBeGreaterThan(0);
+
+    const engine = new RuleEngine(state);
+    const command = {
+      type: 'CAST_SPELL',
+      playerId: P1,
+      payload: { spellId: 'DRAW_CARD', targetDecision: {} },
+    };
+
+    const result = engine.execute(command as any);
+    expect(result.success).toBe(true);
+    const reshuffleEvent = result.events.find(e => e.type === 'DISCARD_RESHUFFLED_TO_DRAW');
+    const drawEvent = result.events.find(e => e.type === 'CARDS_DRAWN');
+    expect(reshuffleEvent).toBeDefined();
+    expect(drawEvent).toBeDefined();
+  });
+});
+
+describe('Spell: REUSE_LAST_CARD', () => {
+  let state: GameState;
+  const P1 = 'P1';
+
+  beforeEach(() => {
+    const config: GameConfig = {
+      ...baseConfig,
+      playerCount: 1,
+      cards: {
+        ...baseConfig.cards,
+        // Define card templates for the test
+        templates: [
+          { id: 'MW1', type: 'MOVE_WIZARD', moveValueMode: 'FIXED', fixedValue: 1 },
+          { id: 'MT2', type: 'MOVE_TOWER', moveValueMode: 'FIXED', fixedValue: 2 },
+        ],
+      },
+      spellSetup: { ...baseConfig.spellSetup, mode: 'FIXED', selectedSpellIds: ['REUSE_LAST_CARD'] },
+    };
+    state = buildInitialState(config, 'test-seed');
+    // Give player 1 potion
+    applyEvent(state, { type: 'POTION_FILLED', payload: { playerId: P1, potionId: getPlayer(state, P1).potionIds[0], from: 'EMPTY', to: 'FULL', reason: 'TEST' } });
+  });
+
+  it('should successfully reuse a MOVE_WIZARD card', () => {
+    // Setup: Put a wizard move card in the discard pile
+    const cardInstanceId = Object.keys(state.cardInstances).find(id => state.cardInstances[id].templateId === 'MW1')!;
+    state.discardPile.push(cardInstanceId);
+
+    const engine = new RuleEngine(state);
+    const wizardId = getPlayer(state, P1).wizardIds[0];
+    const command = {
+      type: 'CAST_SPELL',
+      playerId: P1,
+      payload: {
+        spellId: 'REUSE_LAST_CARD',
+        targetDecision: { wizardId, chosenMode: 'MOVE_WIZARD' },
+      },
+    };
+
+    const result = engine.execute(command as any);
+    expect(result.success).toBe(true);
+    const wizardMovedEvent = result.events.find(e => e.type === 'WIZARD_MOVED');
+    expect(wizardMovedEvent).toBeDefined();
+    expect(wizardMovedEvent?.payload.wizardId).toBe(wizardId);
+    expect(wizardMovedEvent?.payload.steps).toBe(1); // From the card's fixedValue
+  });
+
+  it('should successfully reuse a MOVE_TOWER card', () => {
+    // Setup: Put a tower move card in the discard pile
+    const cardInstanceId = Object.keys(state.cardInstances).find(id => state.cardInstances[id].templateId === 'MT2')!;
+    state.discardPile.push(cardInstanceId);
+    const tower = getTower(state, 'T1');
+    tower.spaceIndex = 0;
+
+    const engine = new RuleEngine(state);
+    const command = {
+      type: 'CAST_SPELL',
+      playerId: P1,
+      payload: {
+        spellId: 'REUSE_LAST_CARD',
+        targetDecision: { towerSourceSpaceIndex: 0, pickedTowerId: 'T1', chosenMode: 'MOVE_TOWER' },
+      },
+    };
+
+    const result = engine.execute(command as any);
+    expect(result.success).toBe(true);
+    const towerMovedEvent = result.events.find(e => e.type === 'TOWER_MOVED');
+    expect(towerMovedEvent).toBeDefined();
+    expect(towerMovedEvent?.payload.towerId).toBe('T1');
+    expect(towerMovedEvent?.payload.steps).toBe(2); // From the card's fixedValue
+  });
+});

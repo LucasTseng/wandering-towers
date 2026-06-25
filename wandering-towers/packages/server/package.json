@@ -1,0 +1,20 @@
+{
+  "name": "@wt/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc",
+    "dev": "echo \"server dev: Phase 5\"",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@wt/shared": "workspace:*",
+    "@wt/engine": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  }
+}
