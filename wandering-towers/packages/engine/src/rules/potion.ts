@@ -1,8 +1,32 @@
-import type { ActionCommand, GameEvent, GameState } from '@wt/shared';
+import type { ActionCommand, GameEvent, GameState, PlayerID } from '@wt/shared';
 import { RuleErrorCode } from '@wt/shared';
 import { RuleError } from '../rule-error';
 import { allWizardsInCastle, potionsByState } from '../state/selectors';
 import { advanceOrEndTurn, type ActionOutcome } from './turn-flow';
+
+/**
+ * 封印奖励：若玩家有空瓶，翻 1 个 EMPTY→FULL（V2 §14.2 / V4 §14.7 step4）。
+ *
+ * 一次封印≥1 巫师只奖励 1 瓶；无空瓶则不奖励但仍可封印。
+ * 由 play-card（塔牌封印）与法术（MOVE_TOWER_2 封印）复用。
+ */
+export function maybeFillOnePotionForImprisonment(
+  state: GameState,
+  playerId: PlayerID,
+  emit: (type: GameEvent['type'], payload: unknown) => GameEvent,
+): void {
+  const player = state.players[playerId];
+  if (!player) return;
+  const emptyPotionId = player.potionIds.find((pid) => state.potions[pid]?.state === 'EMPTY');
+  if (!emptyPotionId) return; // 无空瓶 -> 不奖励
+  emit('POTION_FILLED', {
+    playerId,
+    potionId: emptyPotionId,
+    from: 'EMPTY',
+    to: 'FULL',
+    reason: 'IMPRISONMENT_REWARD',
+  });
+}
 
 /**
  * 主动填充一个药水瓶

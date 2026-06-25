@@ -7,9 +7,5 @@
       "@wt/shared/*": ["../shared/src/*"]
     }
   },
-  "include": ["src/**/*", "tests/**/*"],
-  "exclude": [
-    "src/rules/spells/**",
-    "src/rules/cast-spell.ts"
-  ]
+  "include": ["src/**/*", "tests/**/*"]
 }

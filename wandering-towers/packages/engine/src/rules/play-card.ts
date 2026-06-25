@@ -16,6 +16,7 @@ import { advanceOrEndTurn, type ActionOutcome } from './turn-flow';
 import { moveTowerSegment } from './move-tower';
 import { advanceRavenCastleAfterWizardEntered } from './raven-castle';
 import { checkEndgameTrigger } from './endgame'; // Will be used in later tasks
+import { maybeFillOnePotionForImprisonment } from './potion';
 
 /**
  * playMovementCard（V4 §14.3 / V2 规则 §6-13）
@@ -235,25 +236,6 @@ function isTowerIllegalTarget(e: unknown): boolean {
     e.code === RuleErrorCode.INVALID_TOWER_TARGET ||
     e.code === RuleErrorCode.TARGET_CAPACITY_EXCEEDED
   );
-}
-
-/** 封印奖励：恰好翻 1 个 EMPTY -> FULL（V2 §14.2 / §23.2） */
-function maybeFillOnePotionForImprisonment(
-  state: GameState,
-  playerId: PlayerID,
-  emit: (type: GameEvent['type'], payload: unknown) => GameEvent,
-): void {
-  const player = state.players[playerId];
-  if (!player) return;
-  const emptyPotionId = player.potionIds.find((pid) => state.potions[pid]?.state === 'EMPTY');
-  if (!emptyPotionId) return; // 无空瓶 -> 不奖励
-  emit('POTION_FILLED', {
-    playerId,
-    potionId: emptyPotionId,
-    from: 'EMPTY',
-    to: 'FULL',
-    reason: 'IMPRISONMENT_REWARD',
-  });
 }
 
 export type { GameEvent, WizardID, TowerID };

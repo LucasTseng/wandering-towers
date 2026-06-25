@@ -10,6 +10,9 @@ import { playMovementCard } from './rules/play-card';
 import { discardRedraw, skipSecondAction } from './rules/discard-redraw';
 import { endTurnCleanup } from './rules/turn-flow';
 import { finalizeWinners } from './rules/endgame';
+import { castSpell } from './spells/cast-spell';
+// 副作用导入：模块加载时自动注册全部法术实现到 spell-registry
+import './spells/implementations';
 
 /**
  * 规则引擎入口与结算管线（V4 §3 / V3 后端协议 §20-21）
@@ -80,8 +83,12 @@ export class RuleEngine {
           endTurn = r.endTurn;
           break;
         }
-        case 'CAST_SPELL':
-          throw new RuleError(RuleErrorCode.INVALID_PHASE, 'CAST_SPELL not implemented yet (Phase 2)');
+        case 'CAST_SPELL': {
+          const r = castSpell(this.state, command, emit);
+          endTurn = r.turnEnds;
+          endgameTriggered = r.endgameTriggered;
+          break;
+        }
         case 'END_TURN':
           // 显式结束回合（通常引擎在 endTurn=true 时自动清理，但也允许显式调用）
           endTurn = true;

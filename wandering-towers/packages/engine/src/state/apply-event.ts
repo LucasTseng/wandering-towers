@@ -208,10 +208,12 @@ export function applyEvent(state: GameState, event: GameEvent): void {
       return;
     }
     case 'POTION_SPENT': {
-      const { potionId } = event.payload as { potionId: string };
-      const potion = state.potions[potionId];
-      if (potion && potion.state === 'FULL') {
-        potion.state = 'SPENT';
+      const { potionIds } = event.payload as { potionIds: string[] };
+      for (const potionId of potionIds) {
+        const potion = state.potions[potionId];
+        if (potion && potion.state === 'FULL') {
+          potion.state = 'SPENT';
+        }
       }
       return;
     }
