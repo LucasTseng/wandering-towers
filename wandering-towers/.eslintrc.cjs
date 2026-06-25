@@ -23,9 +23,6 @@ module.exports = {
     'coverage',
     '*.js',
     '*.cjs',
-    // packages/ui 为 Phase 3 半成品，基于旧 API 不编译不接线，Phase C 重写。
-    // 与 tsconfig 一致：不参与 lint，避免幻想代码阻断质量门禁。
-    'packages/ui/**',
   ],
   rules: {
     '@typescript-eslint/no-explicit-any': 'warn',
