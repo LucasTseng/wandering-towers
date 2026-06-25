@@ -10,8 +10,6 @@
   "include": ["src/**/*", "tests/**/*"],
   "exclude": [
     "src/rules/spells/**",
-    "src/rules/cast-spell.ts",
-    "src/resolvers/**",
-    "src/validators/**"
+    "src/rules/cast-spell.ts"
   ]
 }
