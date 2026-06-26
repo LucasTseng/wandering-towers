@@ -30,28 +30,6 @@ export function Board({
 
   return (
     <div style={{ position: 'relative', width: radius * 2 + 100, height: radius * 2 + 100, margin: '0 auto' }}>
-      <div
-        style={{
-          position: 'absolute',
-          left: radius + 50,
-          top: radius + 50,
-          transform: 'translate(-50%, -50%)',
-          width: 120,
-          height: 120,
-          borderRadius: '50%',
-          background: '#37474f',
-          color: '#fff',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: 14,
-          textAlign: 'center',
-        }}
-      >
-        乌鸦城堡
-        <br />
-        目标
-      </div>
       {cells.map((cell, i) => {
         const angle = (i / size) * 2 * Math.PI - Math.PI / 2;
         const x = radius + 50 + radius * Math.cos(angle) - 40;

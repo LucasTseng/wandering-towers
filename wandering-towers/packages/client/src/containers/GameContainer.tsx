@@ -18,7 +18,7 @@ import { WinnerPanel } from '../components/WinnerPanel';
 type UIIntent =
   | { type: 'IDLE' }
   | { type: 'PLAY_CARD_WIZARD'; cardId: CardID; moveValue: number }
-  | { type: 'PLAY_CARD_TOWER_PICK'; cardId: CardID; moveValue: number }
+  | { type: 'PLAY_CARD_TOWER_PICK'; cardId: CardID; moveValue: number; chosenMode?: 'WIZARD' | 'TOWER' | undefined }
   | { type: 'PLAY_CARD_MODE_CHOICE'; cardId: CardID; moveValue: number }
   | { type: 'CAST_SPELL_MOVE_WIZARD'; spellId: SpellID }
   | { type: 'CAST_SPELL_MOVE_WIZARD_TARGET'; spellId: SpellID; wizardId: WizardID }
@@ -92,7 +92,8 @@ export function GameContainer() {
     if (mode === 'WIZARD') {
       setIntent({ type: 'PLAY_CARD_WIZARD', cardId: intent.cardId, moveValue: intent.moveValue });
     } else {
-      setIntent({ type: 'PLAY_CARD_TOWER_PICK', cardId: intent.cardId, moveValue: intent.moveValue });
+      // 二选一牌选塔模式：必须传 chosenMode='TOWER'，否则 play-card.resolveMode 抛 INVALID_PHASE
+      setIntent({ type: 'PLAY_CARD_TOWER_PICK', cardId: intent.cardId, moveValue: intent.moveValue, chosenMode: 'TOWER' });
     }
   }, [intent]);
 
@@ -147,6 +148,8 @@ export function GameContainer() {
           cardId: intent.cardId,
           towerSourceSpaceIndex: spaceIndex,
           pickedTowerId: towerId,
+          // 二选一牌需要传 chosenMode
+          ...(intent.chosenMode ? { chosenMode: intent.chosenMode } : {}),
         }),
       );
       if (ok) resetIntent();

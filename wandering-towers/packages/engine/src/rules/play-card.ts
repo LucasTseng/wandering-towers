@@ -203,7 +203,7 @@ function resolveMode(
   if (tmpl.type === MovementCardType.MOVE_TOWER) return 'TOWER';
   // MOVE_WIZARD_OR_TOWER
   if (decision.chosenMode !== 'WIZARD' && decision.chosenMode !== 'TOWER') {
-    throw new RuleError(RuleErrorCode.INVALID_PHASE, 'chosenMode required for OR card');
+    throw new RuleError(RuleErrorCode.INVALID_MOVE_VALUE, 'chosenMode required for OR card');
   }
   return decision.chosenMode;
 }

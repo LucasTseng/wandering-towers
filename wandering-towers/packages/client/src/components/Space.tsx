@@ -6,7 +6,7 @@ export interface TowerLayerData {
   towerId: TowerID;
   hasRavenShield: boolean;
   hasCastle: boolean;
-  imprisonedWizardIds: WizardID[];
+  imprisonedWizards: number;
   /** 该层是否为当前可选切片起点 */
   selectableStart?: boolean | undefined;
   /** 该层是否在已选切片内 */
@@ -17,17 +17,29 @@ export interface TowerLayerData {
 export interface SpaceCellData {
   spaceIndex: number;
   isRavenShieldGround: boolean;
+  /** 城堡在该空间地面（ON_SPACE，无塔） */
   castleHere: boolean;
+  /** 城堡所在塔 ID（null 表示在地面） */
+  castleOnTowerId: TowerID | null;
   towerLayers: TowerLayerData[];
   groundWizards: { wizardId: WizardID; ownerPlayerId: string }[];
   topWizards: { wizardId: WizardID; ownerPlayerId: string }[];
-  /** 合法目标高亮 */
   highlight?: 'target' | 'selectable' | undefined;
   onSpaceClick?: (() => void) | undefined;
   onWizardClick?: ((wizardId: WizardID) => void) | undefined;
 }
 
-/** 单个空间格（环形棋盘的一格） */
+/** 单个空间格（环形棋盘的一格）
+ *
+ * 渲染顺序（顶→底）：
+ *  1. 顶塔的巫师（站在最顶塔之上）
+ *  2. 塔堆（column-reverse：底层在下、最顶塔在最上）
+ *  3. 地面巫师
+ *  4. 乌鸦城堡在地面时（ON_SPACE）显示在中心
+ *  5. 空间索引
+ *
+ * 封印巫师不显示——V2 §23.1：玩家凭记忆记录被封印的巫师，UI 不揭示。
+ */
 export function SpaceCell({ data }: { data: SpaceCellData }) {
   return (
     <div
@@ -48,72 +60,98 @@ export function SpaceCell({ data }: { data: SpaceCellData }) {
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        justifyContent: 'flex-end',
         padding: 2,
         boxSizing: 'border-box',
       }}
       title={`空间 ${data.spaceIndex}${data.isRavenShieldGround ? '（乌鸦纹章位）' : ''}`}
     >
-      {/* 塔堆：自下而上渲染，视觉上底层在下 */}
+      {/* 顶塔的巫师（站在最顶塔之上） */}
+      {data.topWizards.length > 0 && (
+        <div
+          style={{
+            display: 'flex',
+            gap: 1,
+            marginBottom: -2,
+            zIndex: 2,
+            position: 'relative',
+          }}
+        >
+          {data.topWizards.map((w) => (
+            <WizardPiece
+              key={w.wizardId}
+              wizardId={w.wizardId}
+              ownerPlayerId={w.ownerPlayerId}
+              onClick={data.onWizardClick ? () => data.onWizardClick!(w.wizardId) : undefined}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* 塔堆：column-reverse 让底层在下、最顶塔在最上 */}
       <div style={{ display: 'flex', flexDirection: 'column-reverse', alignItems: 'center' }}>
         {data.towerLayers.map((layer) => (
           <div key={layer.towerId} style={{ position: 'relative' }}>
             <TowerBlock
               towerId={layer.towerId}
               hasRavenShield={layer.hasRavenShield}
-              hasCastle={layer.hasCastle}
+              hasCastle={data.castleOnTowerId === layer.towerId}
               selectable={layer.selectableStart}
               inSlice={layer.inSlice}
               onClick={layer.onTowerClick}
             />
-            {/* 塔顶巫师：只在最顶层显示 */}
-            {/* 封印巫师标记（开发模式：直显） */}
-            {layer.imprisonedWizardIds.length > 0 && (
-              <div
-                style={{
-                  position: 'absolute',
-                  right: -4,
-                  top: -6,
-                  background: '#444',
-                  color: '#fff',
-                  borderRadius: 8,
-                  fontSize: 8,
-                  padding: '0 3px',
-                }}
-                title={`封印: ${layer.imprisonedWizardIds.join(', ')}`}
-              >
-                {layer.imprisonedWizardIds.length}
-              </div>
-            )}
+            {/* 不显示封印标记（V2 §23.1） */}
           </div>
         ))}
       </div>
 
-      {/* 塔顶巫师（站在最顶塔上） */}
-      <div style={{ display: 'flex', gap: 1, marginBottom: 1 }}>
-        {data.topWizards.map((w) => (
-          <WizardPiece
-            key={w.wizardId}
-            wizardId={w.wizardId}
-            ownerPlayerId={w.ownerPlayerId}
-            onClick={data.onWizardClick ? () => data.onWizardClick!(w.wizardId) : undefined}
-          />
-        ))}
-      </div>
-
       {/* 地面巫师 */}
-      <div style={{ display: 'flex', gap: 1, marginBottom: 1 }}>
-        {data.groundWizards.map((w) => (
-          <WizardPiece
-            key={w.wizardId}
-            wizardId={w.wizardId}
-            ownerPlayerId={w.ownerPlayerId}
-            onClick={data.onWizardClick ? () => data.onWizardClick!(w.wizardId) : undefined}
-          />
-        ))}
-      </div>
+      {data.groundWizards.length > 0 && (
+        <div style={{ display: 'flex', gap: 1, marginTop: 1 }}>
+          {data.groundWizards.map((w) => (
+            <WizardPiece
+              key={w.wizardId}
+              wizardId={w.wizardId}
+              ownerPlayerId={w.ownerPlayerId}
+              onClick={data.onWizardClick ? () => data.onWizardClick!(w.wizardId) : undefined}
+            />
+          ))}
+        </div>
+      )}
 
-      <span style={{ fontSize: 9, color: '#666' }}>{data.spaceIndex}</span>
+      {/* 乌鸦城堡在地面（ON_SPACE）时显示在中心 */}
+      {data.castleHere && (
+        <div
+          style={{
+            position: 'absolute',
+            left: '50%',
+            top: '50%',
+            transform: 'translate(-50%, -50%)',
+            fontSize: 28,
+            zIndex: 1,
+            pointerEvents: 'none',
+            opacity: 0.85,
+          }}
+          title="乌鸦城堡"
+        >
+          🏰
+        </div>
+      )}
+
+      {/* 空间索引（右下角小标签） */}
+      <span
+        style={{
+          position: 'absolute',
+          right: 2,
+          bottom: 1,
+          fontSize: 9,
+          color: '#666',
+          background: 'rgba(255,255,255,0.7)',
+          borderRadius: 3,
+          padding: '0 2px',
+        }}
+      >
+        {data.spaceIndex}
+      </span>
     </div>
   );
 }
