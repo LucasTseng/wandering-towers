@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { RuleEngine } from '@wt/engine';
 import type { ActionCommand, GameConfig, GameState, GameEvent } from '@wt/shared';
 
@@ -6,8 +6,9 @@ import type { ActionCommand, GameConfig, GameState, GameEvent } from '@wt/shared
  * useGame — 前端与规则引擎的连接层（本地单机模式）
  *
  * 引擎权威：所有状态变更经 RuleEngine.execute，前端只发 ActionCommand。
- * 引擎内部 mutate engine.state（同引用），故每次 execute 后递增 version
- * 触发 React 重渲染，并暴露最新事件流供日志面板使用。
+ * 引擎内部 mutate engine.state（同引用），故每次 execute 后用 tick 触发重渲染。
+ * 为让 React 感知 state 变化（下游 useMemo 失效），返回的 state 是浅拷贝
+ * —— 引用每次变化，但子对象仍是 engine.state 的引用（已被引擎 mutate 为最新）。
  */
 export interface UseGameResult {
   state: GameState;
@@ -33,7 +34,7 @@ export function useGame(config: GameConfig, seed: number): UseGameResult {
   }
   const engine = engineRef.current;
 
-  const [, setVersion] = useState(0);
+  const [tick, setTick] = useState(0);
   const [events, setEvents] = useState<GameEvent[]>(engine.getInitEvents());
   const [isFinished, setIsFinished] = useState<boolean>(
     engine.state.turnPhase === 'GAME_FINISHED',
@@ -49,14 +50,15 @@ export function useGame(config: GameConfig, seed: number): UseGameResult {
       const result = engine.execute(fullCommand);
       setEvents((prev) => [...prev, ...result.events]);
       setIsFinished(engine.state.turnPhase === 'GAME_FINISHED');
-      // state 是同引用 mutate，用 version 递增触发重渲染
-      setVersion((v) => v + 1);
+      // tick 触发重渲染；下面 state 的 useMemo 依赖 tick 会重新浅拷贝 engine.state
+      setTick((t) => t + 1);
     },
     [engine],
   );
 
-  // engine.state 是同引用 mutate；setVersion 触发重渲染后此处返回最新引用
-  const state: GameState = engine.state;
+  // 浅拷贝 engine.state 得到新引用，但所有子对象（board/towers/wizards/...）
+  // 仍是 engine 内部 mutate 的引用——下游读取到的就是最新状态。
+  const state = useMemo(() => ({ ...engine.state }), [tick, engine]);
 
   return { state, events, dispatch, isFinished };
 }

@@ -100,7 +100,10 @@ export class RuleEngine {
       }
     } catch (e) {
       if (e instanceof RuleError) throw e;
-      throw new RuleError(RuleErrorCode.INVALID_PHASE, (e as Error).message);
+      // 非 RuleError 异常：包装为 INVALID_PHASE 但保留原始信息
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('[engine.execute] non-RuleError caught:', msg, e instanceof Error ? e.stack : '');
+      throw new RuleError(RuleErrorCode.INVALID_PHASE, `internal: ${msg}`);
     }
 
     // 应用本命令产生的事件到状态
@@ -122,6 +125,8 @@ export class RuleEngine {
     }
 
     const allEvents = acc.all();
+    // 每次成功结算命令后 stateVersion +1（V3 §5.2），用于联机防冲突 + 前端变化检测
+    this.state.stateVersion += 1;
     return {
       success: true,
       events: allEvents,
