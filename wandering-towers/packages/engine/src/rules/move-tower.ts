@@ -101,6 +101,7 @@ export function moveTowerSegment(
 
   // 5. (V4 §14.5 step 6.3 + §14.6) 处理源位置解封
   // 源空间留下的塔（不在 movedSlice 中的）若有 IMPRISONED 巫师，移到该塔顶
+  // （兼容历史 E1 行为：源空间留下塔的 imprisoned 解封到原空间最顶塔/地面）
   releaseVisibleWizardsAtSource(state, sourceSpaceIndex, movedSlice, emit);
 
   // 6. 识别随切片移动的巫师（站在切片顶部的）
@@ -213,6 +214,25 @@ function releaseVisibleWizardsAtSource(
         : { mode: WizardStateType.ON_GROUND, spaceIndex: sourceSpaceIndex };
 
       // V4 §14.6 步骤 2.3: emit WIZARD_RELEASED（实际变更由 applyEvent 完成）
+      emit('WIZARD_RELEASED', { wizardId, to });
+    }
+  }
+
+  // (Phase F1 修复) 切片内塔的 IMPRISONED 巫师——当塔「被移走离开 W 原本所在空间」
+  // 时解封（W.state.spaceIndex === sourceSpaceIndex 表示 W 封入时就在该源空间）。
+  // 不满足 spaceIndex 条件的 W（如被其它塔在更早的回合中封入）保持随塔走。
+  for (const towerId of movedSlice) {
+    const tower = state.towers[towerId];
+    if (!tower) continue;
+    const imprisoned = [...tower.imprisonedWizards];
+    for (const wizardId of imprisoned) {
+      const wizard = state.wizards[wizardId];
+      if (!wizard || wizard.state.mode !== WizardStateType.IMPRISONED) continue;
+      // 只解封「封入时就在该源空间」的 W：覆盖塔离开 W 原本空间，W 重新暴露
+      if (wizard.state.spaceIndex !== sourceSpaceIndex) continue;
+      const to: WizardState = newTopTower
+        ? { mode: WizardStateType.ON_TOWER_TOP, spaceIndex: sourceSpaceIndex, topTowerId: newTopTower }
+        : { mode: WizardStateType.ON_GROUND, spaceIndex: sourceSpaceIndex };
       emit('WIZARD_RELEASED', { wizardId, to });
     }
   }

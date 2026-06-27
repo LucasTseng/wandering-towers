@@ -133,17 +133,25 @@ describe('TC-SEAL 封印 / 解封', () => {
     expect(state.towers['T01']!.imprisonedWizards).toHaveLength(2);
   });
 
-  it('封印随塔移动：切片内塔封印的巫师 spaceIndex 更新到 dest', () => {
+  it('切片内塔封印的巫师随塔移走时解封回源空间（V2 §14.5）', () => {
+    // 场景：空间 4 stack=[T01, T02, T03]，T02 内 IMPRISONED 着 W_P2_01（封入时就在空间 4）。
+    // 移走 T02（slice=[T02]）顺时针 2 格 → 源空间 stack=[T01, T03]，
+    // 按 V2 §14.5 封印塔（T02）被移走使 W 重新暴露 → 解封到源空间留下的最顶塔 T03。
     const { state } = newGame(2);
     stackTowers(state, 4, ['T01', 'T02', 'T03']);
     clearSpace(state, 6);
-    // T02 内封印一名巫师
     const w = state.wizards['W_P2_01']!;
     w.state = { mode: WizardStateType.IMPRISONED, spaceIndex: 4, insideTowerId: 'T02' };
     state.towers['T02']!.imprisonedWizards.push('W_P2_01');
     const { emit } = mkApplyEmit(state);
     moveTowerSegment(state, 'P1', 4, 'T02', 2, 'MOVEMENT_CARD', emit);
-    expect(state.wizards['W_P2_01']!.state).toMatchObject({ mode: 'IMPRISONED', spaceIndex: 6, insideTowerId: 'T02' });
+    // 期望：W 解封到源空间最顶塔 T01 顶（slice=[T02, T03] 移走，源空间留 T01）
+    expect(state.wizards['W_P2_01']!.state).toMatchObject({
+      mode: WizardStateType.ON_TOWER_TOP,
+      spaceIndex: 4,
+      topTowerId: 'T01',
+    });
+    expect(state.towers['T02']!.imprisonedWizards).not.toContain('W_P2_01');
     assertInvariants(state);
   });
 
@@ -188,5 +196,40 @@ describe('E1 源塔解封（V4 §14.6 releaseVisibleWizardsAtSource）', () => {
     expect(state.towers['T01']!.imprisonedWizards).not.toContain('W_P2_01');
     // 事件流应包含 WIZARD_RELEASED
     expect(events.some((e) => e.type === 'WIZARD_RELEASED')).toBe(true);
+  });
+});
+
+describe('E2 覆盖塔移走时塔内巫师解封（V2 §14.5）', () => {
+  it('切片 [覆盖塔] 移走后，塔内 IMPRISONED 巫师应解封到原空间留下的最顶塔', () => {
+    // 场景：空间 1 stack=[T01]，T01 顶有 W_P1_01 ON_TOWER_TOP。
+    // T05 从空间 3 落到空间 1 覆盖 T01 → W_P1_01 被封进 T05（V2 §14.1）。
+    // 空间 1 stack 变成 [T01, T05]，W_P1_01.state = IMPRISONED, insideTowerId=T05。
+    // 移走 T05（slice=[T05]）→ 源空间 stack=[T01]，W_P1_01 应解封到 T01 顶。
+    const { state } = newGame(2);
+    state.board.spaces[1]!.groundVisibleWizards = [];
+    placeWizardOnTower(state, 'W_P1_01', 1, 'T01');
+    setSingleTower(state, 3, 'T05');
+
+    // T05 落到空间 1（顺时针 14 格：3+14=17 mod 16=1）
+    const { emit } = mkApplyEmit(state);
+    moveTowerSegment(state, 'P2', 3, 'T05', 14, 'MOVEMENT_CARD', emit);
+
+    expect(state.board.spaces[1]!.towerStack).toEqual(['T01', 'T05']);
+    expect(state.wizards['W_P1_01']!.state.mode).toBe(WizardStateType.IMPRISONED);
+    expect((state.wizards['W_P1_01']!.state as { insideTowerId: string }).insideTowerId).toBe('T05');
+    expect(state.towers['T05']!.imprisonedWizards).toContain('W_P1_01');
+
+    // 移走 T05（slice=[T05]）顺时针 1 格到空间 2
+    const { emit: emit2 } = mkApplyEmit(state);
+    moveTowerSegment(state, 'P1', 1, 'T05', 1, 'MOVEMENT_CARD', emit2);
+
+    // 期望：W_P1_01 解封到 T01 顶（ON_TOWER_TOP @ 空间 1, topTowerId=T01）
+    expect(state.board.spaces[1]!.towerStack).toEqual(['T01']);
+    expect(state.wizards['W_P1_01']!.state.mode).toBe(WizardStateType.ON_TOWER_TOP);
+    const wState = state.wizards['W_P1_01']!.state as { spaceIndex: number; topTowerId: string };
+    expect(wState.spaceIndex).toBe(1);
+    expect(wState.topTowerId).toBe('T01');
+    expect(state.towers['T05']!.imprisonedWizards).not.toContain('W_P1_01');
+    assertInvariants(state);
   });
 });

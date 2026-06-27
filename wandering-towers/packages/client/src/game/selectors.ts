@@ -1,4 +1,4 @@
-import type { GameState, SpaceIndex, TowerID, WizardID } from '@wt/shared';
+import type { GameState, PlayerID, SpaceIndex, TowerID, WizardID } from '@wt/shared';
 import {
   towerStackAt,
   groundWizardsAt,
@@ -14,8 +14,14 @@ import type { SpaceCellData } from '../components/Space';
  * 注意：被封印的巫师不出现在 groundWizards / topWizards（选择器只查可见巫师），
  * 也不在 SpaceCellData 中暴露 ID（玩家凭记忆记录被封印的巫师）。
  * `imprisonedWizards` 只暴露数量，开发模式可选使用；当前 UI 不显示该数字。
+ *
+ * `selectableWizardOwnerId`：V2 §8.1 颜色隔离——若指定，仅该玩家的巫师可被点。
  */
-export function deriveSpaceCell(state: GameState, index: SpaceIndex): SpaceCellData {
+export function deriveSpaceCell(
+  state: GameState,
+  index: SpaceIndex,
+  selectableWizardOwnerId?: PlayerID,
+): SpaceCellData {
   const stack = towerStackAt(state, index); // 自下而上
   const groundIds = groundWizardsAt(state, index);
   const topIds = towerTopWizardsAt(state, index);
@@ -44,12 +50,16 @@ export function deriveSpaceCell(state: GameState, index: SpaceIndex): SpaceCellD
       wizardId: wid,
       ownerPlayerId: state.wizards[wid]?.ownerPlayerId ?? '',
     })),
+    selectableWizardOwnerId,
   };
 }
 
 /** 派生全部 16 个空间的展示数据 */
-export function deriveAllSpaces(state: GameState): SpaceCellData[] {
-  return state.board.spaces.map((sp) => deriveSpaceCell(state, sp.index));
+export function deriveAllSpaces(
+  state: GameState,
+  selectableWizardOwnerId?: PlayerID,
+): SpaceCellData[] {
+  return state.board.spaces.map((sp) => deriveSpaceCell(state, sp.index, selectableWizardOwnerId));
 }
 
 /** 某空间的塔堆自下而上 TowerID[]（切片选择用） */

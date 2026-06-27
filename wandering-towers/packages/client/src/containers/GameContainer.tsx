@@ -27,7 +27,8 @@ type UIIntent =
   | { type: 'CAST_SPELL_FREE_WIZARD'; spellId: SpellID }
   | { type: 'CAST_SPELL_SWAP_FIRST'; spellId: SpellID }
   | { type: 'CAST_SPELL_SWAP_SECOND'; spellId: SpellID; spaceIndex1: SpaceIndex }
-  | { type: 'CAST_SPELL_NO_TARGET'; spellId: SpellID };
+  | { type: 'CAST_SPELL_NO_TARGET'; spellId: SpellID }
+  | { type: 'DISCARD_REDRAW_FLOW' };
 
 const PHASE_LABEL: Record<string, string> = {
   TURN_START: '回合开始',
@@ -49,7 +50,8 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
   const [sliceStart, setSliceStart] = useState<{ spaceIndex: SpaceIndex; towerId: TowerID } | null>(null);
 
   const current = state.currentPlayerId;
-  const cells = useMemo(() => deriveAllSpaces(state), [state]);
+  // F2 颜色隔离（V2 §8.1）：所有 visible 巫师的 onClick 仅当 owner === current 时生效
+  const cells = useMemo(() => deriveAllSpaces(state, current), [state, current]);
 
   /** 安全派发：捕获 RuleError 显示提示 */
   const safeDispatch = useCallback((cmd: ActionCommand) => {
@@ -154,6 +156,16 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
           pickedTowerId: towerId,
           // 二选一牌需要传 chosenMode
           ...(intent.chosenMode ? { chosenMode: intent.chosenMode } : {}),
+        }),
+      );
+      if (ok) resetIntent();
+    } else if (intent.type === 'DISCARD_REDRAW_FLOW') {
+      // F3 弃 3 重抽 + 选塔：dispatch DISCARD_REDRAW with moveTowerAfterRedraw=true
+      const ok = safeDispatch(
+        castCmd(current, 'DISCARD_REDRAW', {
+          moveTowerAfterRedraw: true,
+          towerSourceSpaceIndex: spaceIndex,
+          pickedTowerId: towerId,
         }),
       );
       if (ok) resetIntent();
@@ -280,7 +292,7 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
         </div>
       )}
 
-      {intent.type !== 'IDLE' && intent.type !== 'PLAY_CARD_MODE_CHOICE' && (
+      {intent.type !== 'IDLE' && intent.type !== 'PLAY_CARD_MODE_CHOICE' && intent.type !== 'DISCARD_REDRAW_FLOW' && (
         <div
           style={{
             background: '#e8f5e9',
@@ -341,7 +353,7 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
                 : undefined
             }
             onTowerClick={
-              intent.type === 'PLAY_CARD_TOWER_PICK' || intent.type === 'CAST_SPELL_MOVE_TOWER'
+              intent.type === 'PLAY_CARD_TOWER_PICK' || intent.type === 'CAST_SPELL_MOVE_TOWER' || intent.type === 'DISCARD_REDRAW_FLOW'
                 ? handleTowerClick
                 : undefined
             }
@@ -367,7 +379,37 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
         }}
       >
         <div style={{ minWidth: 0, overflow: 'auto' }}>
-          {intent.type === 'PLAY_CARD_MODE_CHOICE' && (
+          {intent.type === 'DISCARD_REDRAW_FLOW' ? (
+            // F3 弃 3 重抽流程：提示「选塔（可选）」+ 不选直接结束 + 取消
+            <div
+              style={{
+                background: '#e8f5e9',
+                padding: '4px 10px',
+                borderRadius: 4,
+                fontSize: 12,
+                display: 'flex',
+                alignItems: 'center',
+                marginBottom: 4,
+              }}
+            >
+              <span>🔄 弃 3 张重抽：点棋盘上的塔前进 1 格（可选）</span>
+              <span style={{ marginLeft: 12 }}>
+                <button
+                  onClick={() => {
+                    // 不选塔，直接结束
+                    const ok = safeDispatch(
+                      castCmd(current, 'DISCARD_REDRAW', { moveTowerAfterRedraw: false }),
+                    );
+                    if (ok) resetIntent();
+                  }}
+                  style={{ margin: '0 4px', cursor: 'pointer' }}
+                >
+                  不选（直接结束）
+                </button>
+              </span>
+              <button onClick={resetIntent} style={{ marginLeft: 'auto', cursor: 'pointer' }}>取消</button>
+            </div>
+          ) : intent.type === 'PLAY_CARD_MODE_CHOICE' ? (
             <div
               style={{
                 background: '#e8f5e9',
@@ -386,7 +428,26 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
               </span>
               <button onClick={resetIntent} style={{ marginLeft: 'auto', cursor: 'pointer' }}>取消</button>
             </div>
-          )}
+          ) : null}
+          {/* F3 弃 3 重抽触发按钮：仅 ACTION_1 阶段 + 手牌非空 + 未结束 + 不在其他 intent */}
+          {state.turnPhase === TurnPhase.ACTION_1 &&
+            intent.type === 'IDLE' &&
+            !isFinished &&
+            (state.players[current]?.hand.length ?? 0) > 0 && (
+              <div style={{ marginBottom: 4 }}>
+                <button
+                  onClick={() => {
+                    setError(null);
+                    setSliceStart(null);
+                    setIntent({ type: 'DISCARD_REDRAW_FLOW' });
+                  }}
+                  style={{ cursor: 'pointer', fontSize: 12, padding: '2px 10px' }}
+                  title="弃 3 张重抽（可选移动一座塔前进 1 格）"
+                >
+                  🔄 弃 3 张重抽
+                </button>
+              </div>
+            )}
           <HandPanel
             state={state}
             playerId={current}

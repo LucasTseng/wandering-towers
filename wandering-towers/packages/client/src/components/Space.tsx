@@ -1,4 +1,4 @@
-import type { TowerID, WizardID } from '@wt/shared';
+import type { PlayerID, TowerID, WizardID } from '@wt/shared';
 import { TowerBlock } from './Tower';
 import { WizardPiece } from './Wizard';
 
@@ -27,6 +27,8 @@ export interface SpaceCellData {
   highlight?: 'target' | 'selectable' | undefined;
   onSpaceClick?: (() => void) | undefined;
   onWizardClick?: ((wizardId: WizardID) => void) | undefined;
+  /** V2 §8.1 颜色隔离：仅当 ownerPlayerId 等于此值时巫师可被点击。undefined = 不过滤（保留旧行为） */
+  selectableWizardOwnerId?: PlayerID | undefined;
 }
 
 /** 单个空间格（环形棋盘的一格）
@@ -82,7 +84,13 @@ export function SpaceCell({ data }: { data: SpaceCellData }) {
               wizardId={w.wizardId}
               ownerPlayerId={w.ownerPlayerId}
               size={14}
-              onClick={data.onWizardClick ? () => data.onWizardClick!(w.wizardId) : undefined}
+              onClick={
+                data.onWizardClick &&
+                (data.selectableWizardOwnerId === undefined ||
+                  w.ownerPlayerId === data.selectableWizardOwnerId)
+                  ? () => data.onWizardClick!(w.wizardId)
+                  : undefined
+              }
             />
           ))}
         </div>
@@ -114,7 +122,13 @@ export function SpaceCell({ data }: { data: SpaceCellData }) {
               wizardId={w.wizardId}
               ownerPlayerId={w.ownerPlayerId}
               size={14}
-              onClick={data.onWizardClick ? () => data.onWizardClick!(w.wizardId) : undefined}
+              onClick={
+                data.onWizardClick &&
+                (data.selectableWizardOwnerId === undefined ||
+                  w.ownerPlayerId === data.selectableWizardOwnerId)
+                  ? () => data.onWizardClick!(w.wizardId)
+                  : undefined
+              }
             />
           ))}
         </div>
