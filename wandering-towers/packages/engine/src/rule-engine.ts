@@ -68,7 +68,8 @@ export class RuleEngine {
     try {
       switch (command.type) {
         case 'PLAY_CARD': {
-          const r = playMovementCard(this.state, command, emit);
+          // 骰子牌服务端权威掷骰（V3 §23.2 方案 A）：rng 返回 [0,1)
+          const r = playMovementCard(this.state, command, emit, () => this.rng.next());
           endTurn = r.endTurn;
           endgameTriggered = r.endgameTriggered ?? false;
           break;

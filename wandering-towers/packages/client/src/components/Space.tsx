@@ -46,21 +46,21 @@ export function SpaceCell({ data }: { data: SpaceCellData }) {
       className="space-cell"
       onClick={data.onSpaceClick}
       style={{
-        width: 80,
-        height: 80,
+        width: 60,
+        height: 60,
         border: data.highlight === 'target'
           ? '2px solid gold'
           : data.highlight === 'selectable'
             ? '2px dashed #4caf50'
             : '1px solid #888',
-        borderRadius: 6,
+        borderRadius: 4,
         background: data.castleHere ? '#fff3cd' : data.isRavenShieldGround ? '#e8eaf6' : '#f5f5f5',
         position: 'relative',
         cursor: data.onSpaceClick ? 'pointer' : 'default',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        padding: 2,
+        padding: 1,
         boxSizing: 'border-box',
       }}
       title={`空间 ${data.spaceIndex}${data.isRavenShieldGround ? '（乌鸦纹章位）' : ''}`}
@@ -71,7 +71,7 @@ export function SpaceCell({ data }: { data: SpaceCellData }) {
           style={{
             display: 'flex',
             gap: 1,
-            marginBottom: -2,
+            marginBottom: -1,
             zIndex: 2,
             position: 'relative',
           }}
@@ -81,6 +81,7 @@ export function SpaceCell({ data }: { data: SpaceCellData }) {
               key={w.wizardId}
               wizardId={w.wizardId}
               ownerPlayerId={w.ownerPlayerId}
+              size={14}
               onClick={data.onWizardClick ? () => data.onWizardClick!(w.wizardId) : undefined}
             />
           ))}
@@ -112,6 +113,7 @@ export function SpaceCell({ data }: { data: SpaceCellData }) {
               key={w.wizardId}
               wizardId={w.wizardId}
               ownerPlayerId={w.ownerPlayerId}
+              size={14}
               onClick={data.onWizardClick ? () => data.onWizardClick!(w.wizardId) : undefined}
             />
           ))}
@@ -126,7 +128,7 @@ export function SpaceCell({ data }: { data: SpaceCellData }) {
             left: '50%',
             top: '50%',
             transform: 'translate(-50%, -50%)',
-            fontSize: 28,
+            fontSize: 22,
             zIndex: 1,
             pointerEvents: 'none',
             opacity: 0.85,
@@ -141,13 +143,13 @@ export function SpaceCell({ data }: { data: SpaceCellData }) {
       <span
         style={{
           position: 'absolute',
-          right: 2,
-          bottom: 1,
-          fontSize: 9,
+          right: 1,
+          bottom: 0,
+          fontSize: 8,
           color: '#666',
           background: 'rgba(255,255,255,0.7)',
-          borderRadius: 3,
-          padding: '0 2px',
+          borderRadius: 2,
+          padding: '0 1px',
         }}
       >
         {data.spaceIndex}

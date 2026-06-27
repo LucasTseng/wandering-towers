@@ -11,3 +11,4 @@ export * from './game-config';
 export * from './action-command';
 export * from './game-event';
 export * from './game-state';
+export * from './save-game';

@@ -41,8 +41,8 @@ function castCmd(playerId: PlayerID, type: ActionCommand['type'], payload: unkno
   return { commandId: '', playerId, type, payload: payload as ActionCommand['payload'] };
 }
 
-export function GameContainer() {
-  const { state, events, dispatch, isFinished } = useGame(defaultConfig(2), 42);
+export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void }) {
+  const { state, events, dispatch, isFinished, exportSave } = useGame(defaultConfig(2), 42);
   const [intent, setIntent] = useState<UIIntent>({ type: 'IDLE' });
   const [error, setError] = useState<string | null>(null);
   const [sliceStart, setSliceStart] = useState<{ spaceIndex: SpaceIndex; towerId: TowerID } | null>(null);
@@ -74,10 +74,6 @@ export function GameContainer() {
     const tmpl = getCardTemplate(state, cardId);
     if (!tmpl) return;
     const moveValue = tmpl.fixedValue ?? 1;
-    if (tmpl.moveValueMode !== 'FIXED') {
-      setError('骰子牌暂不支持（待实装）');
-      return;
-    }
     if (tmpl.type === MovementCardType.MOVE_WIZARD) {
       setIntent({ type: 'PLAY_CARD_WIZARD', cardId, moveValue });
     } else if (tmpl.type === MovementCardType.MOVE_TOWER) {
@@ -212,22 +208,82 @@ export function GameContainer() {
   }, [intent, state]);
 
   return (
-    <div style={{ fontFamily: 'sans-serif', padding: 12, maxWidth: 1200, margin: '0 auto' }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1 style={{ margin: 0 }}>巫师飞塔 / The Wandering Towers</h1>
-        <div style={{ fontSize: 14 }}>
+    <div
+      style={{
+        fontFamily: 'sans-serif',
+        padding: 8,
+        height: '100vh',
+        boxSizing: 'border-box',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
+      }}
+    >
+      <header
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: 12,
+          flexShrink: 0,
+        }}
+      >
+        <h1 style={{ margin: 0, fontSize: 18 }}>巫师飞塔</h1>
+        <div style={{ fontSize: 13, flex: 1, textAlign: 'center' }}>
           当前：<strong>{current}</strong> · 阶段：{PHASE_LABEL[state.turnPhase] ?? state.turnPhase} · 轮次 {state.roundNumber}
+        </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button
+            onClick={() => {
+              const save = exportSave();
+              const blob = new Blob([JSON.stringify(save, null, 2)], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `${save.gameId}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+            title="导出当前对局为 JSON（用于回放/复盘）"
+            style={{ cursor: 'pointer', fontSize: 12 }}
+          >
+            💾 导出
+          </button>
+          {onEnterReplay && (
+            <button onClick={onEnterReplay} style={{ cursor: 'pointer', fontSize: 12 }}>
+              📼 加载
+            </button>
+          )}
         </div>
       </header>
 
       {error && (
-        <div style={{ background: '#fdecea', color: '#c0392b', padding: '6px 12px', borderRadius: 6, margin: '8px 0' }}>
+        <div
+          style={{
+            background: '#fdecea',
+            color: '#c0392b',
+            padding: '4px 10px',
+            borderRadius: 4,
+            fontSize: 12,
+            flexShrink: 0,
+          }}
+        >
           ⚠ {error}
         </div>
       )}
 
       {intent.type !== 'IDLE' && (
-        <div style={{ background: '#e8f5e9', padding: '6px 12px', borderRadius: 6, margin: '8px 0', fontSize: 13, display: 'flex', alignItems: 'center' }}>
+        <div
+          style={{
+            background: '#e8f5e9',
+            padding: '4px 10px',
+            borderRadius: 4,
+            fontSize: 12,
+            display: 'flex',
+            alignItems: 'center',
+            flexShrink: 0,
+          }}
+        >
           <span>{intentPrompt(intent)}</span>
           {intent.type === 'PLAY_CARD_MODE_CHOICE' && (
             <span style={{ marginLeft: 12 }}>
@@ -239,14 +295,38 @@ export function GameContainer() {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 12, marginTop: 12 }}>
-        <aside>
+      {/* 主区域：左 playerInfo / 中 board（自适应） */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '200px 1fr',
+          gap: 8,
+          flex: 1,
+          minHeight: 0,
+        }}
+      >
+        <aside
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 4,
+            overflowY: 'auto',
+          }}
+        >
           {state.playerOrder.map((pid) => (
             <PlayerInfo key={pid} state={state} playerId={pid} isCurrent={pid === current} />
           ))}
         </aside>
 
-        <main>
+        <main
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: 0,
+            minWidth: 0,
+          }}
+        >
           <Board
             cells={cells}
             targetSpaces={targetSpaces}
@@ -271,26 +351,38 @@ export function GameContainer() {
                 : undefined
             }
           />
-          <div style={{ marginTop: 12 }}>
-            <HandPanel
-              state={state}
-              playerId={current}
-              selectedCardId={
-                intent.type === 'PLAY_CARD_WIZARD' || intent.type === 'PLAY_CARD_TOWER_PICK' || intent.type === 'PLAY_CARD_MODE_CHOICE'
-                  ? intent.cardId
-                  : null
-              }
-              onCardClick={handleCardClick}
-              disabled={isFinished || state.turnPhase === TurnPhase.GAME_FINISHED}
-            />
-          </div>
-          <div style={{ marginTop: 8 }}>
-            <SpellPanel state={state} playerId={current} onCastSpell={handleCastSpell} />
-          </div>
-          <div style={{ marginTop: 8 }}>
-            <LogPanel events={events as GameEvent[]} />
-          </div>
         </main>
+      </div>
+
+      {/* 底部面板：手牌 + 法术 + 日志 —— 固定在视口底部，flexShrink 0 保证可见 */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr 280px',
+          gap: 8,
+          flexShrink: 0,
+          maxHeight: '30vh',
+        }}
+      >
+        <div style={{ minWidth: 0, overflow: 'auto' }}>
+          <HandPanel
+            state={state}
+            playerId={current}
+            selectedCardId={
+              intent.type === 'PLAY_CARD_WIZARD' || intent.type === 'PLAY_CARD_TOWER_PICK' || intent.type === 'PLAY_CARD_MODE_CHOICE'
+                ? intent.cardId
+                : null
+            }
+            onCardClick={handleCardClick}
+            disabled={isFinished || state.turnPhase === TurnPhase.GAME_FINISHED}
+          />
+        </div>
+        <div style={{ minWidth: 0, overflow: 'auto' }}>
+          <SpellPanel state={state} playerId={current} onCastSpell={handleCastSpell} />
+        </div>
+        <div style={{ minWidth: 0, overflow: 'auto' }}>
+          <LogPanel events={events as GameEvent[]} />
+        </div>
       </div>
 
       {isFinished && <WinnerPanel state={state} />}

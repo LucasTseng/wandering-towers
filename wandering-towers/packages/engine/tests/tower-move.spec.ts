@@ -161,3 +161,32 @@ describe('TC-SEAL 封印 / 解封', () => {
     });
   });
 });
+
+describe('E1 源塔解封（V4 §14.6 releaseVisibleWizardsAtSource）', () => {
+  it('切片移走后源塔 T01 内的封印巫师应解封到 T01 顶', () => {
+    const { state } = newGame(2);
+    stackTowers(state, 4, ['T01', 'T02']);
+    clearSpace(state, 6);
+    // 清理 T01 顶的初始巫师以清晰测试
+    state.board.spaces[4]!.groundVisibleWizards.length = 0;
+    for (const tw of Object.values(state.towers)) {
+      tw.imprisonedWizards.length = 0;
+    }
+    // 手动设置：T01 内有 IMPRISONED 巫师
+    const w = state.wizards['W_P2_01']!;
+    w.state = { mode: WizardStateType.IMPRISONED, spaceIndex: 4, insideTowerId: 'T01' };
+    state.towers['T01']!.imprisonedWizards.push('W_P2_01');
+    const { events, emit } = mkApplyEmit(state);
+    // 移动 T02（slice=[T02]）到 space 6
+    moveTowerSegment(state, 'P1', 4, 'T02', 2, 'MOVEMENT_CARD', emit);
+    // 期望：T01 留下，T01 顶的 IMPRISONED 巫师应解封到 T01 顶
+    expect(state.wizards['W_P2_01']!.state).toMatchObject({
+      mode: WizardStateType.ON_TOWER_TOP,
+      spaceIndex: 4,
+      topTowerId: 'T01',
+    });
+    expect(state.towers['T01']!.imprisonedWizards).not.toContain('W_P2_01');
+    // 事件流应包含 WIZARD_RELEASED
+    expect(events.some((e) => e.type === 'WIZARD_RELEASED')).toBe(true);
+  });
+});

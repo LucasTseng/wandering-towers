@@ -190,6 +190,31 @@ export function applyEvent(state: GameState, event: GameEvent): void {
       }
       return;
     }
+    case 'WIZARD_RELEASED': {
+      // 解封：从原封印塔的登记中移除，并把巫师置为 `to` 状态。
+      // 必须在 applyEvent 实装（而非规则函数直接 mutate），否则纯事件回放
+      // 无法复现解封，破坏 TC-REPLAY-001 一致性。
+      const { wizardId, to } = event.payload as { wizardId: WizardID; to: WizardState };
+      const wizard = state.wizards[wizardId];
+      if (!wizard) return;
+      // 从原封印塔的 imprisonedWizards 列表移除（若仍处于 IMPRISONED）
+      if (wizard.state.mode === WizardStateType.IMPRISONED) {
+        const oldTower = state.towers[wizard.state.insideTowerId];
+        if (oldTower) {
+          const i = oldTower.imprisonedWizards.indexOf(wizardId);
+          if (i > -1) oldTower.imprisonedWizards.splice(i, 1);
+        }
+      }
+      wizard.state = to;
+      // 解封到地面需登记到该空间 groundVisibleWizards
+      if (to.mode === WizardStateType.ON_GROUND) {
+        const sp = state.board.spaces[to.spaceIndex];
+        if (sp && !sp.groundVisibleWizards.includes(wizardId)) {
+          sp.groundVisibleWizards.push(wizardId);
+        }
+      }
+      return;
+    }
 
     // --- Castle Movement ---
     case 'RAVEN_CASTLE_MOVED': {
@@ -258,7 +283,6 @@ export function applyEvent(state: GameState, event: GameEvent): void {
 
     // 标记类事件（暂无状态副作用，仅用于日志/回放）
     case 'DISCARD_RESHUFFLED_TO_DRAW':
-    case 'WIZARD_RELEASED':
     case 'TOWER_STACK_REBUILT':
     case 'WINNER_DETERMINED':
       return;

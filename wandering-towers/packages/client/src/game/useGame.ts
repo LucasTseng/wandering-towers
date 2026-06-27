@@ -1,6 +1,12 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { RuleEngine } from '@wt/engine';
-import type { ActionCommand, GameConfig, GameState, GameEvent } from '@wt/shared';
+import type {
+  ActionCommand,
+  GameConfig,
+  GameEvent,
+  GameState,
+  SaveGame,
+} from '@wt/shared';
 
 /**
  * useGame — 前端与规则引擎的连接层（本地单机模式）
@@ -12,12 +18,18 @@ import type { ActionCommand, GameConfig, GameState, GameEvent } from '@wt/shared
  */
 export interface UseGameResult {
   state: GameState;
-  /** 本回合累计事件流（日志面板用） */
+  /** 本回合累计事件流（init + 所有命令），日志面板用 */
   events: GameEvent[];
+  /** 仅玩家命令产生的事件（用于 SaveGame.recordedEvents） */
+  recordedEvents: GameEvent[];
   /** 派发命令；非法操作抛 RuleError，由调用方捕获提示 */
   dispatch: (command: ActionCommand) => void;
   /** 当前局是否已结束 */
   isFinished: boolean;
+  /** 导出当前对局为 SaveGame（用于回放） */
+  exportSave: (gameId?: string) => SaveGame;
+  /** 本局 seed（用于回放构造 SaveGame） */
+  seed: number;
 }
 
 let cmdSeq = 0;
@@ -34,11 +46,12 @@ export function useGame(config: GameConfig, seed: number): UseGameResult {
   }
   const engine = engineRef.current;
 
-  const [tick, setTick] = useState(0);
-  const [events, setEvents] = useState<GameEvent[]>(engine.getInitEvents());
+  const initEvents = useMemo(() => engine.getInitEvents(), [engine]);
+  const [recordedEvents, setRecordedEvents] = useState<GameEvent[]>([]);
   const [isFinished, setIsFinished] = useState<boolean>(
     engine.state.turnPhase === 'GAME_FINISHED',
   );
+  const [tick, setTick] = useState(0);
 
   const dispatch = useCallback(
     (command: ActionCommand) => {
@@ -48,7 +61,7 @@ export function useGame(config: GameConfig, seed: number): UseGameResult {
         expectedStateVersion: engine.state.stateVersion,
       };
       const result = engine.execute(fullCommand);
-      setEvents((prev) => [...prev, ...result.events]);
+      setRecordedEvents((prev) => [...prev, ...result.events]);
       setIsFinished(engine.state.turnPhase === 'GAME_FINISHED');
       // tick 触发重渲染；下面 state 的 useMemo 依赖 tick 会重新浅拷贝 engine.state
       setTick((t) => t + 1);
@@ -60,5 +73,28 @@ export function useGame(config: GameConfig, seed: number): UseGameResult {
   // 仍是 engine 内部 mutate 的引用——下游读取到的就是最新状态。
   const state = useMemo(() => ({ ...engine.state }), [tick, engine]);
 
-  return { state, events, dispatch, isFinished };
+  const events = useMemo(
+    () => [...initEvents, ...recordedEvents],
+    [initEvents, recordedEvents],
+  );
+
+  const exportSave = useCallback(
+    (gameId?: string): SaveGame => {
+      // 浅拷贝 state 作为 finalState 快照
+      const finalSnapshot: GameState = { ...engine.state };
+      return {
+        gameId: gameId ?? `SG_${Date.now()}_${Math.floor(Math.random() * 1e6)}`,
+        version: '1.0',
+        savedAt: new Date().toISOString(),
+        config,
+        seed,
+        initialEvents: [...initEvents],
+        recordedEvents: [...recordedEvents],
+        finalState: finalSnapshot,
+      };
+    },
+    [engine, config, seed, initEvents, recordedEvents],
+  );
+
+  return { state, events, recordedEvents, dispatch, isFinished, exportSave, seed };
 }

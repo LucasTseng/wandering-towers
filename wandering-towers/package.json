@@ -17,7 +17,7 @@
     "test": "vitest run",
     "test:engine": "pnpm --filter @wt/engine test",
     "test:watch": "vitest",
-    "replay:check": "pnpm --filter @wt/engine run replay:check",
+    "replay:check": "vitest run packages/engine/tests/replay/random-game.spec.ts",
     "docker:build": "docker build -t wandering-towers .",
     "docker:up": "docker compose up --build",
     "docker:down": "docker compose down"

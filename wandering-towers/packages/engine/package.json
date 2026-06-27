@@ -12,8 +12,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "tsc",
-    "test": "vitest run",
-    "replay:check": "vitest run --config vitest.config.ts tests/replay/random-game.spec.ts"
+    "test": "vitest run"
   },
   "dependencies": {
     "@wt/shared": "workspace:*",

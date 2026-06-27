@@ -40,6 +40,7 @@ export function playMovementCard(
   state: GameState,
   command: ActionCommand,
   emit: (type: GameEvent['type'], payload: unknown) => GameEvent,
+  rng?: () => number,
 ): ActionOutcome {
   const playerId = command.playerId;
   assertCurrentPlayer(state, playerId);
@@ -61,7 +62,7 @@ export function playMovementCard(
   if (!tmpl) {
     throw new RuleError(RuleErrorCode.CARD_NOT_IN_HAND, `unknown template ${cardInstance.templateId}`);
   }
-  const moveValue = resolveMoveValue(tmpl, decision);
+  const moveValue = resolveMoveValue(tmpl, decision, rng);
 
   // 3. 判定模式
   const mode = resolveMode(tmpl, decision);
@@ -183,13 +184,25 @@ function lookupCardInstance(state: GameState, cardId: string): CardInstanceLooku
   return { templateId };
 }
 
-function resolveMoveValue(tmpl: MovementCardDefinition, decision: PlayCardDecision): number {
+function resolveMoveValue(
+  tmpl: MovementCardDefinition,
+  decision: PlayCardDecision,
+  rng?: () => number,
+): number {
   if (tmpl.moveValueMode === 'FIXED') {
     return tmpl.fixedValue ?? 0;
   }
-  // DICE：客户端传 resolvedMoveValue，或服务端掷骰（这里取客户端传入，引擎层校验范围）
+  // DICE：优先用客户端传入的 resolvedMoveValue（重掷场景），
+  // 否则若引擎注入了 rng 则服务端掷一次（V3 §23.2 方案 A：服务端权威掷骰）。
   const v = decision.resolvedMoveValue;
-  if (v == null || v < 1 || v > 6) {
+  if (v == null) {
+    if (rng) {
+      // rng 返回 [0,1)，映射到 1..6（掷六面骰）
+      return 1 + Math.floor(rng() * 6);
+    }
+    throw new RuleError(RuleErrorCode.INVALID_MOVE_VALUE, 'dice result missing and no rng');
+  }
+  if (v < 1 || v > 6) {
     throw new RuleError(RuleErrorCode.INVALID_MOVE_VALUE, `dice result invalid: ${v}`);
   }
   return v;

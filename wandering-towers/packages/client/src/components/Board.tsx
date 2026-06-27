@@ -25,11 +25,11 @@ export function Board({
   onWizardClick,
   onTowerClick,
 }: BoardProps) {
-  const radius = 300;
+  const radius = 200;
   const size = cells.length;
 
   return (
-    <div style={{ position: 'relative', width: radius * 2 + 100, height: radius * 2 + 100, margin: '0 auto' }}>
+    <div style={{ position: 'relative', width: radius * 2 + 80, height: radius * 2 + 80, margin: '0 auto' }}>
       {cells.map((cell, i) => {
         const angle = (i / size) * 2 * Math.PI - Math.PI / 2;
         const x = radius + 50 + radius * Math.cos(angle) - 40;

@@ -99,8 +99,9 @@ export function moveTowerSegment(
     }
   }
 
-  // 5. (V4 §14.5 step 6.3) 处理源位置解封（当前模型下为 no-op）
-  releaseVisibleWizardsAtSource(state, sourceSpaceIndex, emit);
+  // 5. (V4 §14.5 step 6.3 + §14.6) 处理源位置解封
+  // 源空间留下的塔（不在 movedSlice 中的）若有 IMPRISONED 巫师，移到该塔顶
+  releaseVisibleWizardsAtSource(state, sourceSpaceIndex, movedSlice, emit);
 
   // 6. 识别随切片移动的巫师（站在切片顶部的）
   const sliceTopTower = movedSlice[movedSlice.length - 1]!;
@@ -169,20 +170,52 @@ export function moveTowerSegment(
 /**
  * releaseVisibleWizardsAtSource（V4 §14.6）
  *
- * 在标准数据模型下，封印巫师始终附属于某座塔（insideTowerId），
- * 塔切片移走时封印巫师已随塔带走（更新 spaceIndex）。
- * 因此「源位置解封」在本模型下为 no-op：不存在「塔走了但巫师留下暴露」的情况——
- * 巫师要么随封印塔走，要么本就可见。
+ * 塔切片移走后，源位置留下的塔不再被上方塔覆盖——
+ * 这些塔内被 IMPRISONED 的巫师应当被解封到该塔的塔顶（ON_TOWER_TOP）。
+ * 如果源位置无塔，巫师解封到地面（ON_GROUND）。
  *
- * 真正的解封由 FREE_A_WIZARD 法术（Phase 2）显式触发。
- * 此函数保留以对齐 V4 伪代码结构，便于未来模型调整。
+ * 同时移走切片后源空间新顶塔的"之前被切片顶塔物理遮挡"的 ON_TOWER_TOP 巫师
+ * state 不需要变化（topTowerId 仍指向新顶塔）——无需 WIZARD_RELEASED。
  */
 function releaseVisibleWizardsAtSource(
-  _state: GameState,
-  _sourceSpaceIndex: SpaceIndex,
-  _emit: (type: GameEvent['type'], payload: unknown) => GameEvent,
+  state: GameState,
+  sourceSpaceIndex: SpaceIndex,
+  movedSlice: TowerID[],
+  emit: (type: GameEvent['type'], payload: unknown) => GameEvent,
 ): void {
-  // 标准 no-op
+  const sourceSpace = state.board.spaces[sourceSpaceIndex];
+  if (!sourceSpace) return;
+
+  // 事件溯源红线：本函数只 emit WIZARD_RELEASED，不直接 mutate state。
+  // 解封的实际状态变更由 applyEvent(WIZARD_RELEASED) 完成，否则纯事件回放
+  // 无法复现解封，破坏 TC-REPLAY-001 一致性。
+
+  const movedSet = new Set(movedSlice);
+  // 源空间移走 movedSlice 后留下的塔（自下而上）；用于决定解封落点
+  const remainingTowers = sourceSpace.towerStack.filter((tid) => !movedSet.has(tid));
+  const newTopTower = remainingTowers[remainingTowers.length - 1];
+
+  for (const towerId of sourceSpace.towerStack) {
+    if (movedSet.has(towerId)) continue; // 切片内的塔不解封（随 slice 走）
+    const tower = state.towers[towerId];
+    if (!tower) continue;
+    // 复制数组以安全遍历
+    const imprisoned = [...tower.imprisonedWizards];
+    for (const wizardId of imprisoned) {
+      const wizard = state.wizards[wizardId];
+      if (!wizard || wizard.state.mode !== WizardStateType.IMPRISONED) continue;
+
+      // V4 §14.6 步骤 2.2: 决定解封位置
+      // - 源空间还有塔（排除 movedSlice）→ 解封到源空间留下的最顶塔
+      // - 源空间无塔（排除 movedSlice 后） → 解封到地面
+      const to: WizardState = newTopTower
+        ? { mode: WizardStateType.ON_TOWER_TOP, spaceIndex: sourceSpaceIndex, topTowerId: newTopTower }
+        : { mode: WizardStateType.ON_GROUND, spaceIndex: sourceSpaceIndex };
+
+      // V4 §14.6 步骤 2.3: emit WIZARD_RELEASED（实际变更由 applyEvent 完成）
+      emit('WIZARD_RELEASED', { wizardId, to });
+    }
+  }
 }
 
 /** 工具：判断某塔是否可作为「被提起部分的底层」合法切片起点（任意塔堆内塔皆可） */
