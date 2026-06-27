@@ -18,7 +18,7 @@ import { DebugPanel, isDebugMode } from '../components/DebugPanel';
 /** UI 多步交互意图 */
 type UIIntent =
   | { type: 'IDLE' }
-  | { type: 'PLAY_CARD_WIZARD'; cardId: CardID; moveValue: number }
+  | { type: 'PLAY_CARD_WIZARD'; cardId: CardID; moveValue: number; chosenMode?: 'WIZARD' | 'TOWER' | undefined }
   | { type: 'PLAY_CARD_TOWER_PICK'; cardId: CardID; moveValue: number; chosenMode?: 'WIZARD' | 'TOWER' | undefined }
   | { type: 'PLAY_CARD_MODE_CHOICE'; cardId: CardID; moveValue: number }
   | { type: 'CAST_SPELL_MOVE_WIZARD'; spellId: SpellID }
@@ -87,7 +87,7 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
   const chooseMode = useCallback((mode: 'WIZARD' | 'TOWER') => {
     if (intent.type !== 'PLAY_CARD_MODE_CHOICE') return;
     if (mode === 'WIZARD') {
-      setIntent({ type: 'PLAY_CARD_WIZARD', cardId: intent.cardId, moveValue: intent.moveValue });
+      setIntent({ type: 'PLAY_CARD_WIZARD', cardId: intent.cardId, moveValue: intent.moveValue, chosenMode: 'WIZARD' });
     } else {
       // 二选一牌选塔模式：必须传 chosenMode='TOWER'，否则 play-card.resolveMode 抛 INVALID_PHASE
       setIntent({ type: 'PLAY_CARD_TOWER_PICK', cardId: intent.cardId, moveValue: intent.moveValue, chosenMode: 'TOWER' });
@@ -98,7 +98,14 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
   const handleWizardClick = useCallback((wizardId: WizardID) => {
     setError(null);
     if (intent.type === 'PLAY_CARD_WIZARD') {
-      const ok = safeDispatch(castCmd(current, 'PLAY_CARD', { cardId: intent.cardId, wizardId }));
+      const ok = safeDispatch(
+        castCmd(current, 'PLAY_CARD', {
+          cardId: intent.cardId,
+          wizardId,
+          // 二选一牌需要传 chosenMode
+          ...(intent.chosenMode ? { chosenMode: intent.chosenMode } : {}),
+        }),
+      );
       if (ok) resetIntent();
     } else if (intent.type === 'CAST_SPELL_MOVE_WIZARD') {
       setIntent({ type: 'CAST_SPELL_MOVE_WIZARD_TARGET', spellId: intent.spellId, wizardId });
@@ -273,7 +280,7 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
         </div>
       )}
 
-      {intent.type !== 'IDLE' && (
+      {intent.type !== 'IDLE' && intent.type !== 'PLAY_CARD_MODE_CHOICE' && (
         <div
           style={{
             background: '#e8f5e9',
@@ -286,12 +293,6 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
           }}
         >
           <span>{intentPrompt(intent)}</span>
-          {intent.type === 'PLAY_CARD_MODE_CHOICE' && (
-            <span style={{ marginLeft: 12 }}>
-              <button onClick={() => chooseMode('WIZARD')} style={{ margin: '0 4px', cursor: 'pointer' }}>巫师</button>
-              <button onClick={() => chooseMode('TOWER')} style={{ margin: '0 4px', cursor: 'pointer' }}>塔</button>
-            </span>
-          )}
           <button onClick={resetIntent} style={{ marginLeft: 'auto', cursor: 'pointer' }}>取消</button>
         </div>
       )}
@@ -366,6 +367,26 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
         }}
       >
         <div style={{ minWidth: 0, overflow: 'auto' }}>
+          {intent.type === 'PLAY_CARD_MODE_CHOICE' && (
+            <div
+              style={{
+                background: '#e8f5e9',
+                padding: '4px 10px',
+                borderRadius: 4,
+                fontSize: 12,
+                display: 'flex',
+                alignItems: 'center',
+                marginBottom: 4,
+              }}
+            >
+              <span>🃏 二选一牌（{intent.moveValue}格）：选择模式</span>
+              <span style={{ marginLeft: 12 }}>
+                <button onClick={() => chooseMode('WIZARD')} style={{ margin: '0 4px', cursor: 'pointer' }}>巫师</button>
+                <button onClick={() => chooseMode('TOWER')} style={{ margin: '0 4px', cursor: 'pointer' }}>塔</button>
+              </span>
+              <button onClick={resetIntent} style={{ marginLeft: 'auto', cursor: 'pointer' }}>取消</button>
+            </div>
+          )}
           <HandPanel
             state={state}
             playerId={current}
