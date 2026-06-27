@@ -1,7 +1,7 @@
 # Phase 4 开发日志：回放与调试面板
 
 > 任务清单：[../00-开发任务总表.md#phase-4回放与调试面板](../00-开发任务总表.md)
-> 状态：T4.1 / T4.2 已完成（2026-06-27）；T4.3 调试面板延后
+> 状态：T4.1 / T4.2 / T4.3 全部完成（2026-06-27）
 
 ## 概览
 事件流持久化 + 回放引擎 + 调试面板。
@@ -11,7 +11,7 @@
 |---|---|---|
 | T4.1 事件流持久化 | ✅ 已完成 | — |
 | T4.2 回放引擎 | ✅ 已完成 | TC-REPLAY-001 / TC-REPLAY-002 |
-| T4.3 调试面板 | ❌ 延后 | — |
+| T4.3 调试面板 | ✅ 已完成 | — |
 
 ## T4.1 事件流持久化
 - `packages/shared/src/types/save-game.ts`：SaveGame 结构（gameId / version / savedAt / config / seed / initialEvents / recordedEvents / finalState?）。
@@ -38,5 +38,13 @@
 - 随机玩家不主动朝乌鸦城堡推进，100 局均未自然终局（命中 800 命令上限）。TC-REPLAY-002 的 DoD 是「无非法状态」（已满足），不要求自然终局；终局/胜负结算路径由 `castle-endgame.spec.ts` 单测覆盖。
 - `stateVersion` 是按命令自增的并发控制元数据（V3 §5.2），不在事件流中——纯事件回放无法复现该计数。TC-REPLAY-001 比较前将双方 stateVersion 归零（联机防冲突用，非游戏状态）。
 
-## T4.3 调试面板（延后）
-- 开发模式下显示 phase / 当前玩家 / 全巫师状态 / 塔内封印 / 药水 / 城堡位置 + 命令注入。本轮不实装，留作后续。
+## T4.3 调试面板
+- 新增 `packages/client/src/components/DebugPanel.tsx`：浮动可折叠面板，通过 URL `?debug` 激活（默认不渲染，避免干扰正常游玩）。
+- 展示分区：
+  - 状态总览：阶段/当前玩家/轮次/stateVersion/drawPile 长度/discardPile 长度/终局触发/胜者。
+  - 乌鸦城堡：位置模式 + 堡内巫师列表。
+  - 全巫师状态：10 张表行（ID/归属/状态/详情），含塔内封印位置。
+  - 塔与封印：9 座塔的位置/层级/纹章/sealed/塔内巫师。
+  - 命令注入器：CommandType 下拉（6 个）+ 玩家下拉（state.playerOrder）+ 原始 JSON payload 文本框 + 注入按钮；错误时显示 `RuleError.code: message`。
+- 接线 `GameContainer`：`isDebugMode()` 时挂载 `<DebugPanel state dispatch />`（dispatch 为 useGame 原始派发）。
+- 实测：注入 `END_TURN` 正确推进轮次；非法命令显示 ✗ + 错误码（结构对称、try/catch 明确）。

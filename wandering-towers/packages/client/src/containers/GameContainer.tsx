@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import type { ActionCommand, CardID, GameEvent, GameState, PlayerID, SpaceIndex, SpellID, TowerID, WizardID } from '@wt/shared';
+import type { ActionCommand, CardID, GameEvent, PlayerID, SpaceIndex, SpellID, TowerID, WizardID } from '@wt/shared';
 import { RuleError } from '@wt/engine';
 import { MovementCardType, TurnPhase, WizardStateType } from '@wt/shared';
 import { clockwiseSpace } from '@wt/engine';
@@ -13,6 +13,7 @@ import { PlayerInfo } from '../components/PlayerInfo';
 import { SpellPanel } from '../components/SpellPanel';
 import { LogPanel } from '../components/LogPanel';
 import { WinnerPanel } from '../components/WinnerPanel';
+import { DebugPanel, isDebugMode } from '../components/DebugPanel';
 
 /** UI 多步交互意图 */
 type UIIntent =
@@ -386,6 +387,8 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
       </div>
 
       {isFinished && <WinnerPanel state={state} />}
+
+      {isDebugMode() && <DebugPanel state={state} dispatch={dispatch} />}
     </div>
   );
 }
