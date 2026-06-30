@@ -171,7 +171,7 @@ describe('TC-SPELL 各法术集成', () => {
     const towerId = 'T02';
     // 封印该巫师到 T02（T02 在某空间）
     const towerSpace = engine.state.board.spaces.findIndex((s) => s.towerStack.includes(towerId));
-    engine.state.wizards[wid]!.state = { mode: WizardStateType.IMPRISONED, spaceIndex: towerSpace, insideTowerId: towerId };
+    engine.state.wizards[wid]!.state = { mode: WizardStateType.IMPRISONED, spaceIndex: towerSpace, insideTowerId: towerId, sealedAs: 'COVERED_TOWER' };
     engine.state.towers[towerId]!.imprisonedWizards.push(wid);
     const r = engine.execute(cmd('P1', 'FREE_A_WIZARD', { imprisonedWizardId: wid }));
     expect(r.success).toBe(true);

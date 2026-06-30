@@ -284,8 +284,14 @@ C. IMPRISONED
 {
   "mode": "IMPRISONED",
   "spaceIndex": 6,
-  "insideTowerId": "T03"
+  "insideTowerId": "T03",
+  "sealedAs": "COVERED_TOWER"
 }
+
+sealedAs 取值（Model B 封印归属）：
+
+* "COVERED_TOWER"：巫师原站在某塔顶，被覆盖后封进该被覆盖塔，跟随该塔；该塔重新成为塔堆顶层时解封回该塔顶。
+* "GROUND"：巫师原在地面，被覆盖塔 landing 后封进覆盖塔；覆盖塔移开其封印所在位置时解封回地面。
 
 D. IN_CASTLE
 

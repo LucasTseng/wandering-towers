@@ -8,7 +8,19 @@ import type { WizardStateType } from '../enums/wizard-state';
 export type WizardState =
   | { mode: 'ON_GROUND'; spaceIndex: SpaceIndex }
   | { mode: 'ON_TOWER_TOP'; spaceIndex: SpaceIndex; topTowerId: TowerID }
-  | { mode: 'IMPRISONED'; spaceIndex: SpaceIndex; insideTowerId: TowerID }
+  | {
+      mode: 'IMPRISONED';
+      spaceIndex: SpaceIndex;
+      insideTowerId: TowerID;
+      /**
+       * 封印归属类型（Model B）：
+       * - COVERED_TOWER：巫师原站在某塔顶，被覆盖后封进**该被覆盖塔**，跟随该塔；
+       *   该塔重新成为塔堆顶层时（其上覆盖塔被移走）自动解封回该塔顶。
+       * - GROUND：巫师原在地面，被覆盖塔 landing 后封进**覆盖塔**；
+       *   覆盖塔移离开其封印所在空间时自动解封回地面/源空间。
+       */
+      sealedAs: 'COVERED_TOWER' | 'GROUND';
+    }
   | { mode: 'IN_CASTLE' };
 
 /**

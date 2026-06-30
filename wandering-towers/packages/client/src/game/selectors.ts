@@ -36,12 +36,16 @@ export function deriveSpaceCell(
     imprisonedWizards: imprisonedWizardsInTower(state, towerId).length,
   }));
 
-  // 地图标记：乌䴇纹章位（乌䴇城堡可落点）= 地面纹章 或 当前顶上为纹章塔
+  // 地图标记：乌鸦纹章位（乌鸦城堡可落点）——与引擎 isRavenShieldPosition 口径一致：
+  //  有塔：只有当**顶塔**带乌鸦纹章才算合法落点；
+  //  无塔：地面带乌鸦纹章即可。
+  const sp = state.board.spaces[index];
   const isRavenShieldPosition =
-    (state.board.spaces[index]?.groundHasRavenShield ?? false) ||
-    towerLayers.some((l) => l.hasRavenShield);
+    (towerLayers.length > 0
+      ? towerLayers[towerLayers.length - 1]!.hasRavenShield
+      : (sp?.groundHasRavenShield ?? false));
   // 火苗数（开局容量，静态地图标记）
-  const setupCapacity = state.board.spaces[index]?.setupCapacity ?? 0;
+  const setupCapacity = sp?.setupCapacity ?? 0;
 
   return {
     spaceIndex: index,

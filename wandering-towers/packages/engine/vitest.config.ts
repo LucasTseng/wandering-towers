@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitest/config';
+import { fileURLToPath } from 'node:url';
 
 export default defineConfig({
   test: {
@@ -7,7 +8,9 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@wt/shared': new URL('../shared/src', import.meta.url).pathname,
+      // fileURLToPath 正确解码路径中的空格等字符（如 "AI studio"），
+      // 用 new URL(...).pathname 会被编码成 %20 导致模块解析失败。
+      '@wt/shared': fileURLToPath(new URL('../shared/src', import.meta.url)),
     },
   },
 });

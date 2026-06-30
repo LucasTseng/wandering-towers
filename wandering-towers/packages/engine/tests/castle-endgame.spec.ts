@@ -53,7 +53,7 @@ describe('TC-CASTLE 乌鸦城堡移动', () => {
       const i = state.ravenCastle.wizardIdsInside.indexOf(wid);
       if (i >= 0) state.ravenCastle.wizardIdsInside.splice(i, 1);
     }
-    w.state = { mode: 'IMPRISONED', spaceIndex: 1, insideTowerId: t01 };
+    w.state = { mode: 'IMPRISONED', spaceIndex: 1, insideTowerId: t01, sealedAs: 'COVERED_TOWER' };
     if (!state.towers[t01]!.imprisonedWizards.includes(wid)) {
       state.towers[t01]!.imprisonedWizards.push(wid);
     }
@@ -84,6 +84,37 @@ describe('TC-CASTLE 乌鸦城堡移动', () => {
     const r = advanceRavenCastleAfterWizardEntered(state, emit);
     expect(r.moved).toBe(false);
     expect(state.ravenCastle.position).toMatchObject({ mode: 'ON_SPACE', spaceIndex: 0 });
+  });
+
+  it('TC-CASTLE-006: 地面有纹章但顶塔无纹章 -> 不可落到该顶塔（顺时针跳过）', () => {
+    // space 0 地面有纹章，但放上无纹章塔 T06；城堡在 space 15，顺时针首候选即 space 0。
+    // 修复后：space 0 因顶塔无纹章不合法 -> 跳过，落到下一个合法位 space 1（T01 有纹章、塔顶无人）。
+    // 修复前：space 0 因地面纹章被误判合法 -> 城堡错落到无纹章顶塔 T06 上。
+    const { state } = newGame(2);
+    // 清场：所有巫师移入城堡
+    for (const w of Object.values(state.wizards)) {
+      if (w.state.mode === WizardStateType.ON_GROUND) {
+        const sp = state.board.spaces[w.state.spaceIndex]!;
+        sp.groundVisibleWizards = sp.groundVisibleWizards.filter((id) => id !== w.id);
+      }
+      w.state = { mode: WizardStateType.IN_CASTLE };
+    }
+    state.ravenCastle.wizardIdsInside = Object.keys(state.wizards);
+    // 城堡到 space 15（无塔空位）；space 0 放无纹章塔 T06；space 1 T01 塔顶无人
+    placeCastleOnSpace(state, 15);
+    clearSpace(state, 0);
+    setSingleTower(state, 0, 'T06'); // T06 无纹章
+    clearTowerTopWizards(state, 1); // T01（有纹章）塔顶清空，作为合法 fallback
+    const { emit } = mkApplyEmit(state);
+    const r = advanceRavenCastleAfterWizardEntered(state, emit);
+    expect(r.moved).toBe(true);
+    // 跳过 space 0（顶塔 T06 无纹章），落到 space 1 的 T01 顶
+    expect(state.ravenCastle.position).toMatchObject({
+      mode: 'ON_TOWER',
+      spaceIndex: 1,
+      topTowerId: 'T01',
+    });
+    assertInvariants(state);
   });
 });
 

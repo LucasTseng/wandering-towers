@@ -122,13 +122,23 @@ export function clockwiseSpace(spaceIndex: SpaceIndex, steps: number, spaceCount
   return n;
 }
 
-/** 判断某空间是否为乌鸦城堡可落点候选（地面纹章位 或 带纹章塔顶） */
+/**
+ * 判断某空间是否为乌鸦城堡可落点候选（V2 §12.2 / 用户规则）。
+ *
+ *  - 该空间**有塔**：只有当**顶塔**带乌鸦纹章时才算合法落点（城堡将落到该顶塔上）。
+ *    「地面有纹章但顶塔无纹章」不算合法——城堡不可落到无纹章的顶塔上。
+ *  - 该空间**无塔**：地面带乌鸦纹章即合法（城堡落到地面）。
+ *
+ * 配合 resolveCastlePositionAt（有塔→顶塔、无塔→地面）与 visibleWizardCountAt
+ * （该位置不得有可见巫师）共同构成完整落点判据。
+ */
 export function isRavenShieldPosition(state: GameState, spaceIndex: SpaceIndex): boolean {
   const sp = space(state, spaceIndex);
-  if (sp.groundHasRavenShield) return true;
-  const top = topTowerAt(state, spaceIndex);
-  if (top && state.towers[top]?.hasRavenShield) return true;
-  return false;
+  if (sp.towerStack.length > 0) {
+    const top = topTowerAt(state, spaceIndex);
+    return !!top && !!state.towers[top]?.hasRavenShield;
+  }
+  return sp.groundHasRavenShield;
 }
 
 /** 安全取空间（越界抛错） */

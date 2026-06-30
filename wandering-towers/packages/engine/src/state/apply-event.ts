@@ -166,10 +166,11 @@ export function applyEvent(state: GameState, event: GameEvent): void {
       return;
     }
     case 'WIZARD_IMPRISONED': {
-      const { wizardId, insideTowerId, spaceIndex } = event.payload as {
+      const { wizardId, insideTowerId, spaceIndex, sealedAs } = event.payload as {
         wizardId: WizardID;
         insideTowerId: TowerID;
         spaceIndex: SpaceIndex;
+        sealedAs: 'COVERED_TOWER' | 'GROUND';
       };
       const wizard = state.wizards[wizardId];
       const tower = state.towers[insideTowerId];
@@ -182,9 +183,12 @@ export function applyEvent(state: GameState, event: GameEvent): void {
           const i = space.groundVisibleWizards.indexOf(wizardId);
           if (i > -1) space.groundVisibleWizards.splice(i, 1);
         }
+      } else if (fromState.mode === WizardStateType.ON_TOWER_TOP) {
+        // Model B：塔顶巫师被封进其原本站立的（被覆盖）塔，无需改 groundVisibleWizards
+        // （塔顶巫师不在 groundVisibleWizards 中，由 ON_TOWER_TOP 状态表达）。
       }
 
-      wizard.state = { mode: WizardStateType.IMPRISONED, spaceIndex, insideTowerId };
+      wizard.state = { mode: WizardStateType.IMPRISONED, spaceIndex, insideTowerId, sealedAs };
       if (!tower.imprisonedWizards.includes(wizardId)) {
         tower.imprisonedWizards.push(wizardId);
       }

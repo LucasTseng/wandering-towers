@@ -9,7 +9,9 @@ import type { TowerID } from '../types/ids';
  * - 开局巫师容量 = 该塔位道路上的火苗数（V2 规则 §5.3 / V4 §11.1）
  *   标准版默认分布等价于 前3位=3、中3位=2、后3位=1，但必须数据化，不写死逻辑。
  * - 9 座塔从乌鸦城堡右侧第一格起顺时针放置，第一座必须带乌鸦纹章（V2 规则 §4.3）
- * - 5 座带乌鸦纹章的塔、4 座普通塔（V2 规则 §2.1）
+ * - 5 座带乌鸦纹章的塔、4 座普通塔（V2 规则 §2.1），
+ *   交错分布：T01/T03/T05/T07/T09 带纹章，T02/T04/T06/T08 普通。
+ *   纹章是印在塔上的固定属性，塔移动后纹章跟随、不消失。
  *
  * 本定义把「乌鸦纹章位」「火苗容量」「塔初始位置」全部数据化，
  * 引擎据此构造棋盘，不硬编码任何 3/2/1 判断。
@@ -88,7 +90,9 @@ function buildStandardSpaces(): SpaceDefinition[] {
 function buildStandardTowers(): TowerDefinition[] {
   // 9 座塔，ID T01~T09。5 座带纹章、4 座普通。
   // 第一座（T01，space 1）必须带纹章（V2 规则 §4.3）。
-  const ravenShieldFlags = [true, true, true, true, true, false, false, false, false];
+  // 带纹章塔与普通塔交错：T01/T03/T05/T07/T09 带纹章，T02/T04/T06/T08 普通。
+  // 纹章是印在塔上的固定属性——塔移动后纹章跟随，不因移动而消失。
+  const ravenShieldFlags = [true, false, true, false, true, false, true, false, true];
   const towers: TowerDefinition[] = [];
   for (let t = 0; t < 9; t++) {
     const towerNum = t + 1;

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { ActionCommand, CardID, GameEvent, PlayerID, SpaceIndex, SpellID, TowerID, WizardID } from '@wt/shared';
+import type { ActionCommand, CardID, GameEvent, MovementCardDefinition, PlayerID, SpaceIndex, SpellID, TowerID, WizardID } from '@wt/shared';
 import { RuleError } from '@wt/engine';
 import { MovementCardType, TurnPhase, WizardStateType } from '@wt/shared';
 import { clockwiseSpace, isWizardVisible, wizardsOfPlayer } from '@wt/engine';
@@ -7,6 +7,7 @@ import { useGame } from '../game/useGame';
 import { defaultConfig, PLAYER_COLORS } from '../game/config';
 import { deriveAllSpaces } from '../game/selectors';
 import { getCardTemplate } from '../game/cardHelper';
+import { Dice } from '../components/Dice';
 import { StageViewport } from '../components/StageViewport';
 import { HandPanel } from '../components/HandPanel';
 import { PlayerBar } from '../components/PlayerBar';
@@ -19,9 +20,14 @@ import { DebugPanel, isDebugMode } from '../components/DebugPanel';
 /** UI 多步交互意图 */
 type UIIntent =
   | { type: 'IDLE' }
-  | { type: 'PLAY_CARD_WIZARD'; cardId: CardID; moveValue: number; chosenMode?: 'WIZARD' | 'TOWER' | undefined }
-  | { type: 'PLAY_CARD_TOWER_PICK'; cardId: CardID; moveValue: number; chosenMode?: 'WIZARD' | 'TOWER' | undefined }
-  | { type: 'PLAY_CARD_MODE_CHOICE'; cardId: CardID; moveValue: number }
+  // 二选一牌：先选模式（骰子/固定都走这）
+  | { type: 'PLAY_CARD_MODE_CHOICE'; cardId: CardID; tmpl: MovementCardDefinition }
+  // 骰子牌已选好模式、等待掷骰（未掷，可取消重选）
+  | { type: 'PLAY_CARD_DICE'; cardId: CardID; tmpl: MovementCardDefinition; chosenMode: 'WIZARD' | 'TOWER' }
+  // 等待点巫师：fixed 牌直接到此（locked=false，可取消）；dice 掷出后到此（locked=true，不可取消）
+  | { type: 'PLAY_CARD_WIZARD'; cardId: CardID; moveValue: number; locked: boolean; chosenMode?: 'WIZARD' | 'TOWER' | undefined }
+  // 等待点塔
+  | { type: 'PLAY_CARD_TOWER_PICK'; cardId: CardID; moveValue: number; locked: boolean; chosenMode?: 'WIZARD' | 'TOWER' | undefined }
   | { type: 'CAST_SPELL_MOVE_WIZARD'; spellId: SpellID }
   | { type: 'CAST_SPELL_MOVE_WIZARD_TARGET'; spellId: SpellID; wizardId: WizardID }
   | { type: 'CAST_SPELL_MOVE_TOWER'; spellId: SpellID }
@@ -89,23 +95,47 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
     setError(null);
     const tmpl = getCardTemplate(state, cardId);
     if (!tmpl) return;
-    const moveValue = tmpl.fixedValue ?? 1;
+    const isDice = tmpl.moveValueMode === 'DICE';
     if (tmpl.type === MovementCardType.MOVE_WIZARD) {
-      setIntent({ type: 'PLAY_CARD_WIZARD', cardId, moveValue });
+      if (isDice) {
+        setIntent({ type: 'PLAY_CARD_DICE', cardId, tmpl, chosenMode: 'WIZARD' });
+      } else {
+        setIntent({ type: 'PLAY_CARD_WIZARD', cardId, moveValue: tmpl.fixedValue ?? 0, locked: false });
+      }
     } else if (tmpl.type === MovementCardType.MOVE_TOWER) {
-      setIntent({ type: 'PLAY_CARD_TOWER_PICK', cardId, moveValue });
+      if (isDice) {
+        setIntent({ type: 'PLAY_CARD_DICE', cardId, tmpl, chosenMode: 'TOWER' });
+      } else {
+        setIntent({ type: 'PLAY_CARD_TOWER_PICK', cardId, moveValue: tmpl.fixedValue ?? 0, locked: false });
+      }
     } else {
-      setIntent({ type: 'PLAY_CARD_MODE_CHOICE', cardId, moveValue });
+      // 二选一牌：先选模式（骰子/固定都先选模式）
+      setIntent({ type: 'PLAY_CARD_MODE_CHOICE', cardId, tmpl });
     }
   }, [state]);
 
   const chooseMode = useCallback((mode: 'WIZARD' | 'TOWER') => {
     if (intent.type !== 'PLAY_CARD_MODE_CHOICE') return;
-    if (mode === 'WIZARD') {
-      setIntent({ type: 'PLAY_CARD_WIZARD', cardId: intent.cardId, moveValue: intent.moveValue, chosenMode: 'WIZARD' });
+    const { cardId, tmpl } = intent;
+    if (tmpl.moveValueMode === 'DICE') {
+      setIntent({ type: 'PLAY_CARD_DICE', cardId, tmpl, chosenMode: mode });
+    } else if (mode === 'WIZARD') {
+      setIntent({ type: 'PLAY_CARD_WIZARD', cardId, moveValue: tmpl.fixedValue ?? 0, locked: false, chosenMode: 'WIZARD' });
     } else {
       // 二选一牌选塔模式：必须传 chosenMode='TOWER'，否则 play-card.resolveMode 抛 INVALID_PHASE
-      setIntent({ type: 'PLAY_CARD_TOWER_PICK', cardId: intent.cardId, moveValue: intent.moveValue, chosenMode: 'TOWER' });
+      setIntent({ type: 'PLAY_CARD_TOWER_PICK', cardId, moveValue: tmpl.fixedValue ?? 0, locked: false, chosenMode: 'TOWER' });
+    }
+  }, [intent]);
+
+  /** 骰子牌掷骰：客户端真随机 1~6，掷出后锁定不可取消 */
+  const rollDice = useCallback(() => {
+    if (intent.type !== 'PLAY_CARD_DICE') return;
+    const value = 1 + Math.floor(Math.random() * 6);
+    const { cardId, chosenMode } = intent;
+    if (chosenMode === 'WIZARD') {
+      setIntent({ type: 'PLAY_CARD_WIZARD', cardId, moveValue: value, locked: true, chosenMode });
+    } else {
+      setIntent({ type: 'PLAY_CARD_TOWER_PICK', cardId, moveValue: value, locked: true, chosenMode });
     }
   }, [intent]);
 
@@ -117,6 +147,7 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
         castCmd(current, 'PLAY_CARD', {
           cardId: intent.cardId,
           wizardId,
+          resolvedMoveValue: intent.moveValue,
           // 二选一牌需要传 chosenMode
           ...(intent.chosenMode ? { chosenMode: intent.chosenMode } : {}),
         }),
@@ -167,6 +198,7 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
           cardId: intent.cardId,
           towerSourceSpaceIndex: spaceIndex,
           pickedTowerId: towerId,
+          resolvedMoveValue: intent.moveValue,
           // 二选一牌需要传 chosenMode
           ...(intent.chosenMode ? { chosenMode: intent.chosenMode } : {}),
         }),
@@ -326,23 +358,6 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
         </div>
       )}
 
-      {intent.type !== 'IDLE' && intent.type !== 'PLAY_CARD_MODE_CHOICE' && intent.type !== 'DISCARD_REDRAW_FLOW' && (
-        <div
-          style={{
-            background: '#e8f5e9',
-            padding: '4px 10px',
-            borderRadius: 4,
-            fontSize: 12,
-            display: 'flex',
-            alignItems: 'center',
-            flexShrink: 0,
-          }}
-        >
-          <span>{intentPrompt(intent)}</span>
-          <button onClick={resetIntent} style={{ marginLeft: 'auto', cursor: 'pointer' }}>取消</button>
-        </div>
-      )}
-
       {/* 主区域：左舞台（1:1 锁定）/ 右侧栏（固定宽 320px）；窄屏降级为单列 */}
       <div
         style={{
@@ -398,6 +413,39 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
 
           {/* 2. 手牌区 + 操作提示 */}
           <div style={{ minWidth: 0 }}>
+            {/* 出牌 / 法术操作提示横幅：放在手牌上方，宽度与手牌区一致，
+                避免提示条占用舞台垂直空间导致 1:1 舞台尺寸抖动。 */}
+            {intent.type !== 'IDLE' && intent.type !== 'PLAY_CARD_MODE_CHOICE' && intent.type !== 'DISCARD_REDRAW_FLOW' && (
+              <div
+                style={{
+                  background: '#e8f5e9',
+                  padding: '4px 10px',
+                  borderRadius: 4,
+                  fontSize: 12,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  marginBottom: 4,
+                  flexWrap: 'wrap',
+                }}
+              >
+                {intent.type === 'PLAY_CARD_DICE' ? (
+                  <Dice value={null} onRoll={rollDice} />
+                ) : (
+                  <span>{intentPrompt(intent)}</span>
+                )}
+                {(() => {
+                  // locked（骰子已掷出）后不可取消，必须选目标
+                  const locked =
+                    (intent.type === 'PLAY_CARD_WIZARD' || intent.type === 'PLAY_CARD_TOWER_PICK') && intent.locked;
+                  return !locked ? (
+                    <button onClick={resetIntent} style={{ marginLeft: 'auto', cursor: 'pointer' }}>取消</button>
+                  ) : (
+                    <span style={{ marginLeft: 'auto', color: '#888' }}>已锁定</span>
+                  );
+                })()}
+              </div>
+            )}
             {intent.type === 'DISCARD_REDRAW_FLOW' && (
               <div
                 style={{
@@ -441,7 +489,7 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
                   gap: 4,
                 }}
               >
-                <span>二选一牌（{intent.moveValue}格）：选模式</span>
+                <span>二选一牌（{intent.tmpl.moveValueMode === 'DICE' ? '骰' : `${intent.tmpl.fixedValue}`}格）：选模式</span>
                 <button onClick={() => chooseMode('WIZARD')} style={{ margin: '0 4px', cursor: 'pointer' }}>巫师</button>
                 <button onClick={() => chooseMode('TOWER')} style={{ margin: '0 4px', cursor: 'pointer' }}>塔</button>
                 <button onClick={resetIntent} style={{ marginLeft: 'auto', cursor: 'pointer' }}>取消</button>
@@ -499,12 +547,14 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
 
 function intentPrompt(intent: UIIntent): string {
   switch (intent.type) {
+    case 'PLAY_CARD_DICE':
+      return `骰子牌：点击骰子掷出点数`;
     case 'PLAY_CARD_WIZARD':
-      return `巫师牌（${intent.moveValue}格）：点击你要移动的可见巫师`;
+      return `巫师牌（${intent.moveValue}格）：点击你要移动的可见巫师${intent.locked ? '（已掷出，不可取消）' : ''}`;
     case 'PLAY_CARD_TOWER_PICK':
-      return `塔牌（${intent.moveValue}格）：点击要移动的塔（该塔及以上整段移动）`;
+      return `塔牌（${intent.moveValue}格）：点击要移动的塔（该塔及以上整段移动）${intent.locked ? '（已掷出，不可取消）' : ''}`;
     case 'PLAY_CARD_MODE_CHOICE':
-      return `二选一牌（${intent.moveValue}格）：选择模式`;
+      return `二选一牌：选择模式`;
     case 'CAST_SPELL_MOVE_WIZARD':
       return `移动巫师：点击要移动的巫师`;
     case 'CAST_SPELL_MOVE_WIZARD_TARGET':

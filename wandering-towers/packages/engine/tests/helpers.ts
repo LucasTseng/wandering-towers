@@ -73,11 +73,12 @@ export function imprisonWizard(
   wizardId: WizardID,
   spaceIndex: SpaceIndex,
   towerId: TowerID,
+  sealedAs: 'COVERED_TOWER' | 'GROUND' = 'COVERED_TOWER',
 ): void {
   const w = state.wizards[wizardId];
   if (!w) throw new Error(`no wizard ${wizardId}`);
   clearWizardLocation(state, wizardId);
-  w.state = { mode: WizardStateType.IMPRISONED, spaceIndex, insideTowerId: towerId };
+  w.state = { mode: WizardStateType.IMPRISONED, spaceIndex, insideTowerId: towerId, sealedAs };
   const tower = state.towers[towerId]!;
   if (!tower.imprisonedWizards.includes(wizardId)) {
     tower.imprisonedWizards.push(wizardId);
@@ -114,7 +115,7 @@ export function clearSpace(state: GameState, spaceIndex: SpaceIndex): void {
       for (const wid of state.towers[tid]!.imprisonedWizards) {
         const w = state.wizards[wid];
         if (w && w.state.mode === 'IMPRISONED') {
-          w.state = { mode: 'IMPRISONED', spaceIndex: target, insideTowerId: tid };
+          w.state = { mode: 'IMPRISONED', spaceIndex: target, insideTowerId: tid, sealedAs: w.state.sealedAs };
         }
       }
     }
@@ -146,7 +147,7 @@ export function relocateTower(state: GameState, towerId: TowerID, toSpaceIndex: 
     for (const wid of state.towers[tid]!.imprisonedWizards) {
       const w = state.wizards[wid];
       if (w && w.state.mode === 'IMPRISONED') {
-        w.state = { mode: 'IMPRISONED', spaceIndex: toSpaceIndex, insideTowerId: tid };
+        w.state = { mode: 'IMPRISONED', spaceIndex: toSpaceIndex, insideTowerId: tid, sealedAs: w.state.sealedAs };
       }
     }
   }

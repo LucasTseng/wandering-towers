@@ -74,6 +74,7 @@ export interface WizardImprisonedPayload {
   wizardId: string;
   insideTowerId: string;
   spaceIndex: number;
+  sealedAs: 'COVERED_TOWER' | 'GROUND';
 }
 export interface WizardReleasedPayload {
   wizardId: string;

@@ -38,12 +38,18 @@ export function SpaceCell({ data, angle }: { data: SpaceCellData; angle: number 
   const topSurfaceZ = tileSurfaceZ + stackHeight;
   const topWizardZ = topSurfaceZ + VISUAL_3D.wizardHeight;
   const groundWizardZ = tileSurfaceZ + VISUAL_3D.wizardHeight;
-  const tileSideCount = Math.abs(data.spaceIndex % 2) === 0 ? 6 : 8;
-  const tileClip =
-    tileSideCount === 6
-      ? 'polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%)'
-      : 'polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%)';
-  const tilePoints = polygonPoints(tileSideCount, VISUAL_3D.tileRadius * 0.92, tileSideCount === 6 ? -Math.PI / 2 : Math.PI / 8);
+  // 16 边形 tile：边法线间隔 22.5°(π/8) 与 16 环邻居圆心夹角一致，
+  // 不旋转顶面时 edge i 自然朝向 neighbor i+1，边边可贴边对齐。
+  // 半径取 0.92*tileRadius ≈ 68 ≈ R·tan(π/16)，使 flat-to-flat = 邻居弦长，贴边无重叠。
+  // 顶面 clip 与侧面墙共用同一组 polygonPoints，杜绝顶面/侧面错位。
+  const tileSideCount = 16;
+  const tilePoints = polygonPoints(tileSideCount, VISUAL_3D.tileRadius * 0.92, 0);
+  const tileClip = `polygon(${tilePoints
+    .map(
+      (p) =>
+        `${((p.x + VISUAL_3D.tileRadius) / (VISUAL_3D.tileRadius * 2)) * 100}% ${((p.y + VISUAL_3D.tileRadius) / (VISUAL_3D.tileRadius * 2)) * 100}%`,
+    )
+    .join(', ')})`;
 
   return (
     <div
@@ -61,7 +67,7 @@ export function SpaceCell({ data, angle }: { data: SpaceCellData; angle: number 
         title={`Space ${data.spaceIndex}`}
         style={{
           ...tileFaceStyle(tileClip, data),
-          transform: `translateZ(${tileSurfaceZ}px) rotateZ(${angle + Math.PI / 2}rad)`,
+          transform: `translateZ(${tileSurfaceZ}px)`,
           cursor: data.onSpaceClick ? 'pointer' : 'default',
           zIndex: 1,
         }}
@@ -101,23 +107,70 @@ export function SpaceCell({ data, angle }: { data: SpaceCellData; angle: number 
         );
       })}
 
-      {data.isRavenShieldPosition && (
+      {data.isRavenShieldGround && data.towerLayers.length === 0 && (
         <div
+          title="乌鸦纹章地面位（乌鸦城堡可落点）"
           style={{
             position: 'absolute',
-            left: VISUAL_3D.tileRadius - 8,
-            top: VISUAL_3D.tileRadius - 22,
-            width: 16,
+            left: 26,
+            top: 26,
+            width: 18,
             height: 18,
-            border: '1px solid rgba(190, 220, 255, 0.9)',
-            borderRadius: '8px 8px 10px 10px',
-            background: 'linear-gradient(180deg, rgba(127,179,255,0.9), rgba(34,77,130,0.82))',
-            boxShadow: '0 0 9px rgba(127,179,255,0.75)',
-            clipPath: 'polygon(50% 100%, 5% 66%, 5% 8%, 95% 8%, 95% 66%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'radial-gradient(circle at 50% 40%, rgba(127,179,255,0.95), rgba(34,77,130,0.9))',
+            border: '1px solid rgba(190,220,255,0.95)',
+            borderRadius: '50%',
+            boxShadow: '0 0 8px rgba(127,179,255,0.85)',
+            // 放在 tile 表面内、16 边形顶面左上角内（内切半径 ~66，left/top 26 落在面内，
+            // 不再像 left/top 4 那样落在方形角隙「地图外」）。
+            // 仅在「地面纹章位且无塔遮挡」时显示：一旦该格被塔压住，地面纹章被塔体盖住不可见，
+            // 由塔顶纹章接管显示。
             transform: `translateZ(${tileSurfaceZ + 3}px)`,
-            zIndex: 2,
+            zIndex: 30,
           }}
-        />
+        >
+          {/* 乌鸦剪影（与 Tower3D 顶部纹章同款三角形） */}
+          <div
+            style={{
+              width: 10,
+              height: 7,
+              background: '#0b1220',
+              clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)',
+              opacity: 0.95,
+            }}
+          />
+        </div>
+      )}
+
+      {data.setupCapacity > 0 && (
+        <div
+          title={`开局容量 ${data.setupCapacity} 名巫师`}
+          style={{
+            position: 'absolute',
+            right: 26,
+            bottom: 26,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 2,
+            padding: '1px 4px',
+            borderRadius: 8,
+            background: 'rgba(40,20,10,0.62)',
+            border: '1px solid rgba(255,140,40,0.7)',
+            fontSize: 10,
+            fontWeight: 700,
+            color: '#ffd9a0',
+            textShadow: '0 1px 1px #000',
+            // 放在 tile 表面内、16 边形顶面右下角内（内切半径 ~66，right/bottom 26 落在面内，
+            // 不再像 right/bottom 3 那样落在方形角隙「地图外」）。
+            transform: `translateZ(${tileSurfaceZ + 3}px)`,
+            zIndex: 30,
+          }}
+        >
+          <span style={{ fontSize: 11, lineHeight: '10px' }}>🔥</span>
+          <span>{data.setupCapacity}</span>
+        </div>
       )}
 
       {data.groundWizards.length > 0 && (

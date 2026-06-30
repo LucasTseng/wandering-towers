@@ -110,17 +110,19 @@ export function moveTowerSegment(
     (w) => w.state.mode === WizardStateType.ON_TOWER_TOP && w.state.topTowerId === sliceTopTower,
   ).map(w => w.id);
 
-  // 7. (V4 §14.5 step 9) 处理目标位置封印
-  const coveringTowerId = movedSlice[0]!; // 切片底部塔负责封印
+  // 7. (V4 §14.5 step 9 / Model B) 处理目标位置封印
+  // Model B 封印归属（与 V2 §14.1 旧口径不同）：
+  //  - 塔顶巫师（站在 dest 原顶塔上）→ 封进**被覆盖塔** originalDestTopTower（跟随该塔），sealedAs='COVERED_TOWER'
+  //  - 地面巫师 → 封进**覆盖塔** coveringTowerId（movedSlice[0]），sealedAs='GROUND'
+  const coveringTowerId = movedSlice[0]!; // 切片底部塔（覆盖塔），负责封印地面巫师
   const groundTargets = [...groundWizardsAt(state, destSpaceIndex)];
-  const originalDestTopTower = topTowerAt(state, destSpaceIndex);
+  const originalDestTopTower = topTowerAt(state, destSpaceIndex); // 被覆盖塔
   const topTargets = originalDestTopTower
     ? Object.values(state.wizards).filter(
         (w) => w.state.mode === WizardStateType.ON_TOWER_TOP && w.state.topTowerId === originalDestTopTower,
       ).map((w) => w.id)
     : [];
-  const allCoveredWizards: WizardID[] = [...groundTargets, ...topTargets];
-  const imprisonmentHappened = allCoveredWizards.length > 0;
+  const imprisonmentHappened = groundTargets.length + topTargets.length > 0;
 
   // 8. (V4 §14.5 step 11) 乌鸦城堡若站在切片内塔上 -> 随切片移动
   let ravenCastleMovedWithSlice = false;
@@ -142,12 +144,21 @@ export function moveTowerSegment(
     wizardsOnTop: wizardsOnSliceTop,
   });
 
-  // 10. 发 WIZARD_IMPRISONED
-  for (const wizardId of allCoveredWizards) {
+  // 10. 发 WIZARD_IMPRISONED（Model B：塔顶→被覆盖塔 COVERED_TOWER；地面→覆盖塔 GROUND）
+  for (const wizardId of topTargets) {
+    emit('WIZARD_IMPRISONED', {
+      wizardId,
+      insideTowerId: originalDestTopTower,
+      spaceIndex: destSpaceIndex,
+      sealedAs: 'COVERED_TOWER',
+    });
+  }
+  for (const wizardId of groundTargets) {
     emit('WIZARD_IMPRISONED', {
       wizardId,
       insideTowerId: coveringTowerId,
       spaceIndex: destSpaceIndex,
+      sealedAs: 'GROUND',
     });
   }
 
@@ -169,14 +180,26 @@ export function moveTowerSegment(
 }
 
 /**
- * releaseVisibleWizardsAtSource（V4 §14.6）
+ * releaseVisibleWizardsAtSource（V4 §14.6 / Model B）
  *
- * 塔切片移走后，源位置留下的塔不再被上方塔覆盖——
- * 这些塔内被 IMPRISONED 的巫师应当被解封到该塔的塔顶（ON_TOWER_TOP）。
- * 如果源位置无塔，巫师解封到地面（ON_GROUND）。
+ * 塔切片移走后，源位置留下的塔不再被上方塔覆盖。Model B 解封规则：
  *
- * 同时移走切片后源空间新顶塔的"之前被切片顶塔物理遮挡"的 ON_TOWER_TOP 巫师
- * state 不需要变化（topTowerId 仍指向新顶塔）——无需 WIZARD_RELEASED。
+ * Part 1（新顶塔解封）：源空间剩余塔堆的**新顶塔 newTopTower** 重新暴露——
+ *   释放其内部 sealedAs='COVERED_TOWER' 的巫师到该塔顶（ON_TOWER_TOP）。
+ *   这正是「被覆盖塔重新成为顶层 → 塔内巫师解封」（用户例子第 3 步 W3 解封）。
+ *   剩余塔堆中**非顶塔**（仍被埋）的 COVERED_TOWER 封印不解封。
+ *   newTopTower 的 GROUND 封印不解封（地面封印只在覆盖塔移开其封印空间时解封，见 Part 2）。
+ *
+ * Part 2（地面封印随覆盖塔离开而解封）：切片内塔中 sealedAs='GROUND' 且
+ *   spaceIndex===source 的巫师——覆盖塔移离开其封印所在空间时解封回源空间
+ *   （地面巫师不跟随塔移动）。仅限 GROUND；COVERED_TOWER 封印随切片走、保持封印
+ *   （用户例子第 3 步 W2 仍封印）。
+ *
+ * 源空间无剩余塔（newTopTower 不存在）时：Part 1 无操作；Part 2 的 GROUND 巫师解封到地面。
+ *
+ * 事件溯源红线：本函数只 emit WIZARD_RELEASED，不直接 mutate state。
+ * 解封的实际状态变更由 applyEvent(WIZARD_RELEASED) 完成，否则纯事件回放
+ * 无法复现解封，破坏 TC-REPLAY-001 一致性。
  */
 function releaseVisibleWizardsAtSource(
   state: GameState,
@@ -187,53 +210,39 @@ function releaseVisibleWizardsAtSource(
   const sourceSpace = state.board.spaces[sourceSpaceIndex];
   if (!sourceSpace) return;
 
-  // 事件溯源红线：本函数只 emit WIZARD_RELEASED，不直接 mutate state。
-  // 解封的实际状态变更由 applyEvent(WIZARD_RELEASED) 完成，否则纯事件回放
-  // 无法复现解封，破坏 TC-REPLAY-001 一致性。
-
   const movedSet = new Set(movedSlice);
   // 源空间移走 movedSlice 后留下的塔（自下而上）；用于决定解封落点
   const remainingTowers = sourceSpace.towerStack.filter((tid) => !movedSet.has(tid));
   const newTopTower = remainingTowers[remainingTowers.length - 1];
 
-  for (const towerId of sourceSpace.towerStack) {
-    if (movedSet.has(towerId)) continue; // 切片内的塔不解封（随 slice 走）
-    const tower = state.towers[towerId];
-    if (!tower) continue;
-    // 复制数组以安全遍历
-    const imprisoned = [...tower.imprisonedWizards];
-    for (const wizardId of imprisoned) {
-      const wizard = state.wizards[wizardId];
-      if (!wizard || wizard.state.mode !== WizardStateType.IMPRISONED) continue;
+  const toState = (): WizardState =>
+    newTopTower
+      ? { mode: WizardStateType.ON_TOWER_TOP, spaceIndex: sourceSpaceIndex, topTowerId: newTopTower }
+      : { mode: WizardStateType.ON_GROUND, spaceIndex: sourceSpaceIndex };
 
-      // V4 §14.6 步骤 2.2: 决定解封位置
-      // - 源空间还有塔（排除 movedSlice）→ 解封到源空间留下的最顶塔
-      // - 源空间无塔（排除 movedSlice 后） → 解封到地面
-      const to: WizardState = newTopTower
-        ? { mode: WizardStateType.ON_TOWER_TOP, spaceIndex: sourceSpaceIndex, topTowerId: newTopTower }
-        : { mode: WizardStateType.ON_GROUND, spaceIndex: sourceSpaceIndex };
-
-      // V4 §14.6 步骤 2.3: emit WIZARD_RELEASED（实际变更由 applyEvent 完成）
-      emit('WIZARD_RELEASED', { wizardId, to });
+  // Part 1：新顶塔的 COVERED_TOWER 封印解封
+  if (newTopTower) {
+    const tower = state.towers[newTopTower];
+    if (tower) {
+      for (const wizardId of [...tower.imprisonedWizards]) {
+        const wizard = state.wizards[wizardId];
+        if (!wizard || wizard.state.mode !== WizardStateType.IMPRISONED) continue;
+        if (wizard.state.sealedAs !== 'COVERED_TOWER') continue;
+        emit('WIZARD_RELEASED', { wizardId, to: toState() });
+      }
     }
   }
 
-  // (Phase F1 修复) 切片内塔的 IMPRISONED 巫师——当塔「被移走离开 W 原本所在空间」
-  // 时解封（W.state.spaceIndex === sourceSpaceIndex 表示 W 封入时就在该源空间）。
-  // 不满足 spaceIndex 条件的 W（如被其它塔在更早的回合中封入）保持随塔走。
+  // Part 2：切片内塔的 GROUND 封印（封印于源空间）随覆盖塔离开而解封
   for (const towerId of movedSlice) {
     const tower = state.towers[towerId];
     if (!tower) continue;
-    const imprisoned = [...tower.imprisonedWizards];
-    for (const wizardId of imprisoned) {
+    for (const wizardId of [...tower.imprisonedWizards]) {
       const wizard = state.wizards[wizardId];
       if (!wizard || wizard.state.mode !== WizardStateType.IMPRISONED) continue;
-      // 只解封「封入时就在该源空间」的 W：覆盖塔离开 W 原本空间，W 重新暴露
+      if (wizard.state.sealedAs !== 'GROUND') continue;
       if (wizard.state.spaceIndex !== sourceSpaceIndex) continue;
-      const to: WizardState = newTopTower
-        ? { mode: WizardStateType.ON_TOWER_TOP, spaceIndex: sourceSpaceIndex, topTowerId: newTopTower }
-        : { mode: WizardStateType.ON_GROUND, spaceIndex: sourceSpaceIndex };
-      emit('WIZARD_RELEASED', { wizardId, to });
+      emit('WIZARD_RELEASED', { wizardId, to: toState() });
     }
   }
 }

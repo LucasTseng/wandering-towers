@@ -7,8 +7,8 @@ export const VISUAL_3D = {
   tileHeight: 10,
   tileRingRadius: 342,
 
-  towerBaseWidth: 62,
-  towerTopWidth: 58,
+  towerBaseWidth: 80,
+  towerTopWidth: 76,
   towerLayerHeight: 44,
   towerSideDepth: 7,
   maxTowerLayers: 9,

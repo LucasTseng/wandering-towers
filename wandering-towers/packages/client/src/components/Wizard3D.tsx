@@ -15,6 +15,15 @@ export function Wizard3D({ wizardId, ownerPlayerId, highlight, dimmed, onClick }
   const owner = wizardId.match(/W_(P\d)/)?.[1] ?? ownerPlayerId;
   const bodyHeight = VISUAL_3D.wizardHeight - VISUAL_3D.wizardHeadRadius * 2;
 
+  // 头部真球体：用一组水平纬度圆盘叠成球。所有圆盘水平、绕竖轴旋转对称，
+  // 任意俯角/水平旋转下都呈球状，不会出现侧立纸片。
+  const headR = VISUAL_3D.wizardHeadRadius;
+  const HEAD_LATITUDES = Array.from({ length: 7 }, (_, i) => {
+    const h = -3.5 + (7 / 6) * i; // [-3.5, 3.5]，覆盖球心上下
+    const r = Math.sqrt(Math.max(0, headR * headR - h * h));
+    return { h, r };
+  });
+
   return (
     <div
       className={'wizard-piece' + (highlight ? ' wt-wizard-glow' : '')}
@@ -65,34 +74,36 @@ export function Wizard3D({ wizardId, ownerPlayerId, highlight, dimmed, onClick }
         />
       ))}
 
+      {/* 头部：水平纬度圆盘叠成真球体，杜绝侧立纸片 */}
       <div
         style={{
           position: 'absolute',
           left: '50%',
-          top: 1,
-          width: VISUAL_3D.wizardHeadRadius * 2,
-          height: VISUAL_3D.wizardHeadRadius * 2,
-          marginLeft: -VISUAL_3D.wizardHeadRadius,
-          borderRadius: '50%',
-          background: 'radial-gradient(circle at 35% 30%, #ffe7c9 0%, #ffcc9d 62%, #c88661 100%)',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.35)',
-          transform: `translateZ(${VISUAL_3D.wizardRadius / 2}px)`,
+          top: VISUAL_3D.wizardHeadRadius + 1,
+          width: 0,
+          height: 0,
+          transformStyle: 'preserve-3d',
+          transform: `translateZ(${VISUAL_3D.wizardHeadRadius / 2}px)`,
         }}
-      />
-      <div
-        style={{
-          position: 'absolute',
-          left: '50%',
-          top: 1,
-          width: VISUAL_3D.wizardHeadRadius * 2,
-          height: VISUAL_3D.wizardHeadRadius * 2,
-          marginLeft: -VISUAL_3D.wizardHeadRadius,
-          borderRadius: '50%',
-          background: 'radial-gradient(circle at 35% 30%, #ffe7c9 0%, #ffcc9d 62%, #c88661 100%)',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.24)',
-          transform: `rotateY(90deg) translateZ(${VISUAL_3D.wizardRadius / 2}px)`,
-        }}
-      />
+      >
+        {HEAD_LATITUDES.map((lat, i) => (
+          <div
+            key={i}
+            style={{
+              position: 'absolute',
+              left: '50%',
+              top: '50%',
+              width: lat.r * 2,
+              height: lat.r * 2,
+              marginLeft: -lat.r,
+              marginTop: -lat.r,
+              borderRadius: '50%',
+              background: 'radial-gradient(circle at 35% 30%, #ffe7c9 0%, #ffcc9d 62%, #c88661 100%)',
+              transform: `translateZ(${lat.h}px)`,
+            }}
+          />
+        ))}
+      </div>
     </div>
   );
 }

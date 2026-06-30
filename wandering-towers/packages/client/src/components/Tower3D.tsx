@@ -50,12 +50,16 @@ export function Tower3D({ towerId, hasRavenShield, selectable, inSlice, onClick,
         return (
           <div
             key={index}
+            onClick={onClick}
+            data-interactive={onClick ? '' : undefined}
+            title={`${towerId}${hasRavenShield ? ' raven mark' : ''}`}
             style={{
               ...sideStyle,
               width: edge + 1,
               height: VISUAL_3D.towerLayerHeight,
               marginLeft: -(edge + 1) / 2,
               marginTop: -VISUAL_3D.towerLayerHeight / 2,
+              cursor: onClick ? 'pointer' : 'default',
               background: `linear-gradient(180deg, ${index % 2 === 0 ? sideA : body} 0%, ${
                 index % 2 === 0 ? sideB : sideA
               } 100%)`,
@@ -122,21 +126,37 @@ export function Tower3D({ towerId, hasRavenShield, selectable, inSlice, onClick,
 
       {hasRavenShield && (
         <div
+          title="乌鸦纹章"
           style={{
             position: 'absolute',
-            left: '50%',
-            top: '50%',
-            width: 18,
-            height: 18,
-            marginLeft: -9,
-            marginTop: -9,
-            borderRadius: 3,
-            background: 'linear-gradient(135deg, #8bc6ff 0%, #24538b 100%)',
-            boxShadow: '0 0 8px rgba(127,179,255,0.9), inset 0 1px 0 rgba(255,255,255,0.45)',
-            clipPath: 'polygon(50% 100%, 4% 62%, 4% 8%, 96% 8%, 96% 62%)',
+            top: 14,
+            right: 14,
+            width: 16,
+            height: 16,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'radial-gradient(circle at 50% 40%, rgba(127,179,255,0.95), rgba(34,77,130,0.9))',
+            border: '1px solid rgba(190,220,255,0.95)',
+            borderRadius: '50%',
+            boxShadow: '0 0 8px rgba(127,179,255,0.85)',
+            // 放在塔顶面右上角（八边形内）：只有本层是顶塔时可见；
+            // 一旦上层塔叠上来，本标记落入上层塔体 Z 区间内被遮挡 → 不可见，
+            // 正好对应「顶塔带纹章才算合法落点」。
             transform: `translateZ(${VISUAL_3D.towerLayerHeight + 6}px)`,
           }}
-        />
+        >
+          {/* 乌鸦剪影（与 Space.tsx 地面纹章同款三角形） */}
+          <div
+            style={{
+              width: 9,
+              height: 7,
+              background: '#0b1220',
+              clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)',
+              opacity: 0.95,
+            }}
+          />
+        </div>
       )}
     </div>
   );
