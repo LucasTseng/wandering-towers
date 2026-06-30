@@ -36,9 +36,18 @@ export function deriveSpaceCell(
     imprisonedWizards: imprisonedWizardsInTower(state, towerId).length,
   }));
 
+  // 地图标记：乌䴇纹章位（乌䴇城堡可落点）= 地面纹章 或 当前顶上为纹章塔
+  const isRavenShieldPosition =
+    (state.board.spaces[index]?.groundHasRavenShield ?? false) ||
+    towerLayers.some((l) => l.hasRavenShield);
+  // 火苗数（开局容量，静态地图标记）
+  const setupCapacity = state.board.spaces[index]?.setupCapacity ?? 0;
+
   return {
     spaceIndex: index,
     isRavenShieldGround: state.board.spaces[index]?.groundHasRavenShield ?? false,
+    isRavenShieldPosition,
+    setupCapacity,
     castleHere: castleSpace === index && castleOnTower === null,
     castleOnTowerId: castleSpace === index ? castleOnTower : null,
     towerLayers,

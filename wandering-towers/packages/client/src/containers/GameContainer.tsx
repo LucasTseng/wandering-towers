@@ -1,15 +1,16 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ActionCommand, CardID, GameEvent, PlayerID, SpaceIndex, SpellID, TowerID, WizardID } from '@wt/shared';
 import { RuleError } from '@wt/engine';
 import { MovementCardType, TurnPhase, WizardStateType } from '@wt/shared';
-import { clockwiseSpace } from '@wt/engine';
+import { clockwiseSpace, isWizardVisible, wizardsOfPlayer } from '@wt/engine';
 import { useGame } from '../game/useGame';
-import { defaultConfig } from '../game/config';
+import { defaultConfig, PLAYER_COLORS } from '../game/config';
 import { deriveAllSpaces } from '../game/selectors';
 import { getCardTemplate } from '../game/cardHelper';
-import { Board } from '../components/Board';
+import { StageViewport } from '../components/StageViewport';
 import { HandPanel } from '../components/HandPanel';
-import { PlayerInfo } from '../components/PlayerInfo';
+import { PlayerBar } from '../components/PlayerBar';
+import { PotionPanel } from '../components/PotionPanel';
 import { SpellPanel } from '../components/SpellPanel';
 import { LogPanel } from '../components/LogPanel';
 import { WinnerPanel } from '../components/WinnerPanel';
@@ -50,8 +51,20 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
   const [sliceStart, setSliceStart] = useState<{ spaceIndex: SpaceIndex; towerId: TowerID } | null>(null);
 
   const current = state.currentPlayerId;
+  const finished = state.turnPhase === TurnPhase.GAME_FINISHED || isFinished;
+  const playerColor = PLAYER_COLORS[current] ?? '#888';
   // F2 颜色隔离（V2 §8.1）：所有 visible 巫师的 onClick 仅当 owner === current 时生效
   const cells = useMemo(() => deriveAllSpaces(state, current), [state, current]);
+
+  // U5 §10.1 响应式：< 960px 时降级为单列（舞台在上、侧栏在下）
+  const [isNarrow, setIsNarrow] = useState(() =>
+    typeof window !== 'undefined' && window.innerWidth < 960,
+  );
+  useEffect(() => {
+    const onResize = () => setIsNarrow(window.innerWidth < 960);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   /** 安全派发：捕获 RuleError 显示提示 */
   const safeDispatch = useCallback((cmd: ActionCommand) => {
@@ -227,17 +240,38 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
     return set;
   }, [intent, state]);
 
+  // §10.4 卡牌选中后可操作巫师高亮集合（塔不发光）。纯 client 侧按 intent + F2 过滤，不预演合法性。
+  const highlightableWizards = useMemo(() => {
+    const set = new Set<WizardID>();
+    if (intent.type === 'PLAY_CARD_WIZARD' || intent.type === 'CAST_SPELL_MOVE_WIZARD') {
+      for (const w of wizardsOfPlayer(state, current)) {
+        if (isWizardVisible(w)) set.add(w.id);
+      }
+    } else if (intent.type === 'CAST_SPELL_FREE_WIZARD') {
+      // 被封印巫师：§23.1 正常对局不揭示，仅 debug 生效（UI 不渲染封印巫师，故集合无可见效果）
+      for (const w of Object.values(state.wizards)) {
+        if (w.state.mode === WizardStateType.IMPRISONED) set.add(w.id);
+      }
+    }
+    return set;
+  }, [intent, state, current]);
+
   return (
     <div
-      style={{
-        fontFamily: 'sans-serif',
-        padding: 8,
-        height: '100vh',
-        boxSizing: 'border-box',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 6,
-      }}
+      className="wt-root-glow"
+      data-glow-off={finished ? '1' : undefined}
+      style={
+        {
+          fontFamily: 'sans-serif',
+          padding: 8,
+          height: '100vh',
+          boxSizing: 'border-box',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 6,
+          ['--wt-current-color' as string]: playerColor,
+        } as React.CSSProperties
+      }
     >
       <header
         style={{
@@ -309,94 +343,78 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
         </div>
       )}
 
-      {/* 主区域：左 playerInfo / 中 board（自适应） */}
+      {/* 主区域：左舞台（1:1 锁定）/ 右侧栏（固定宽 320px）；窄屏降级为单列 */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: '200px 1fr',
+          gridTemplateColumns: isNarrow ? '1fr' : '1fr 320px',
+          gridAutoRows: isNarrow ? 'min-content' : undefined,
           gap: 8,
           flex: 1,
           minHeight: 0,
+          overflow: isNarrow ? 'auto' : undefined,
         }}
       >
+        <StageViewport
+          cells={cells}
+          targetSpaces={targetSpaces}
+          sliceStart={sliceStart}
+          highlightWizards={highlightableWizards}
+          glowOff={finished}
+          onWizardClick={
+            intent.type === 'PLAY_CARD_WIZARD' ||
+            intent.type === 'CAST_SPELL_MOVE_WIZARD' ||
+            intent.type === 'CAST_SPELL_FREE_WIZARD'
+              ? handleWizardClick
+              : undefined
+          }
+          onTowerClick={
+            intent.type === 'PLAY_CARD_TOWER_PICK' || intent.type === 'CAST_SPELL_MOVE_TOWER' || intent.type === 'DISCARD_REDRAW_FLOW'
+              ? handleTowerClick
+              : undefined
+          }
+          onSpaceClick={
+            intent.type === 'CAST_SPELL_MOVE_WIZARD_TARGET' ||
+            intent.type === 'CAST_SPELL_SWAP_FIRST' ||
+            intent.type === 'CAST_SPELL_SWAP_SECOND'
+              ? handleSpaceClick
+              : undefined
+          }
+        />
+
+        {/* 右侧栏四区（§10.3） */}
         <aside
           style={{
             display: 'flex',
             flexDirection: 'column',
-            gap: 4,
+            gap: 6,
             overflowY: 'auto',
-          }}
-        >
-          {state.playerOrder.map((pid) => (
-            <PlayerInfo key={pid} state={state} playerId={pid} isCurrent={pid === current} />
-          ))}
-        </aside>
-
-        <main
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: 0,
             minWidth: 0,
+            minHeight: 0,
           }}
         >
-          <Board
-            cells={cells}
-            targetSpaces={targetSpaces}
-            sliceStart={sliceStart}
-            onWizardClick={
-              intent.type === 'PLAY_CARD_WIZARD' ||
-              intent.type === 'CAST_SPELL_MOVE_WIZARD' ||
-              intent.type === 'CAST_SPELL_FREE_WIZARD'
-                ? handleWizardClick
-                : undefined
-            }
-            onTowerClick={
-              intent.type === 'PLAY_CARD_TOWER_PICK' || intent.type === 'CAST_SPELL_MOVE_TOWER' || intent.type === 'DISCARD_REDRAW_FLOW'
-                ? handleTowerClick
-                : undefined
-            }
-            onSpaceClick={
-              intent.type === 'CAST_SPELL_MOVE_WIZARD_TARGET' ||
-              intent.type === 'CAST_SPELL_SWAP_FIRST' ||
-              intent.type === 'CAST_SPELL_SWAP_SECOND'
-                ? handleSpaceClick
-                : undefined
-            }
-          />
-        </main>
-      </div>
+          {/* 1. 玩家信息区 */}
+          <PlayerBar state={state} currentId={current} />
 
-      {/* 底部面板：手牌 + 法术 + 日志 —— 固定在视口底部，flexShrink 0 保证可见 */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr 280px',
-          gap: 8,
-          flexShrink: 0,
-          maxHeight: '30vh',
-        }}
-      >
-        <div style={{ minWidth: 0, overflow: 'auto' }}>
-          {intent.type === 'DISCARD_REDRAW_FLOW' ? (
-            // F3 弃 3 重抽流程：提示「选塔（可选）」+ 不选直接结束 + 取消
-            <div
-              style={{
-                background: '#e8f5e9',
-                padding: '4px 10px',
-                borderRadius: 4,
-                fontSize: 12,
-                display: 'flex',
-                alignItems: 'center',
-                marginBottom: 4,
-              }}
-            >
-              <span>🔄 弃 3 张重抽：点棋盘上的塔前进 1 格（可选）</span>
-              <span style={{ marginLeft: 12 }}>
+          {/* 2. 手牌区 + 操作提示 */}
+          <div style={{ minWidth: 0 }}>
+            {intent.type === 'DISCARD_REDRAW_FLOW' && (
+              <div
+                style={{
+                  background: '#e8f5e9',
+                  padding: '4px 8px',
+                  borderRadius: 4,
+                  fontSize: 12,
+                  display: 'flex',
+                  alignItems: 'center',
+                  marginBottom: 4,
+                  flexWrap: 'wrap',
+                  gap: 4,
+                }}
+              >
+                <span>弃 3 重抽：点塔前进 1 格（可选）</span>
                 <button
                   onClick={() => {
-                    // 不选塔，直接结束
                     const ok = safeDispatch(
                       castCmd(current, 'DISCARD_REDRAW', { moveTowerAfterRedraw: false }),
                     );
@@ -406,71 +424,75 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
                 >
                   不选（直接结束）
                 </button>
-              </span>
-              <button onClick={resetIntent} style={{ marginLeft: 'auto', cursor: 'pointer' }}>取消</button>
-            </div>
-          ) : intent.type === 'PLAY_CARD_MODE_CHOICE' ? (
-            <div
-              style={{
-                background: '#e8f5e9',
-                padding: '4px 10px',
-                borderRadius: 4,
-                fontSize: 12,
-                display: 'flex',
-                alignItems: 'center',
-                marginBottom: 4,
-              }}
-            >
-              <span>🃏 二选一牌（{intent.moveValue}格）：选择模式</span>
-              <span style={{ marginLeft: 12 }}>
-                <button onClick={() => chooseMode('WIZARD')} style={{ margin: '0 4px', cursor: 'pointer' }}>巫师</button>
-                <button onClick={() => chooseMode('TOWER')} style={{ margin: '0 4px', cursor: 'pointer' }}>塔</button>
-              </span>
-              <button onClick={resetIntent} style={{ marginLeft: 'auto', cursor: 'pointer' }}>取消</button>
-            </div>
-          ) : null}
-          {/* F3 弃 3 重抽触发按钮：仅 ACTION_1 阶段 + 手牌非空 + 未结束 + 不在其他 intent */}
-          {state.turnPhase === TurnPhase.ACTION_1 &&
-            intent.type === 'IDLE' &&
-            !isFinished &&
-            (state.players[current]?.hand.length ?? 0) > 0 && (
-              <div style={{ marginBottom: 4 }}>
-                <button
-                  onClick={() => {
-                    setError(null);
-                    setSliceStart(null);
-                    setIntent({ type: 'DISCARD_REDRAW_FLOW' });
-                  }}
-                  style={{ cursor: 'pointer', fontSize: 12, padding: '2px 10px' }}
-                  title="弃 3 张重抽（可选移动一座塔前进 1 格）"
-                >
-                  🔄 弃 3 张重抽
-                </button>
+                <button onClick={resetIntent} style={{ marginLeft: 'auto', cursor: 'pointer' }}>取消</button>
               </div>
             )}
-          <HandPanel
-            state={state}
-            playerId={current}
-            selectedCardId={
-              intent.type === 'PLAY_CARD_WIZARD' || intent.type === 'PLAY_CARD_TOWER_PICK' || intent.type === 'PLAY_CARD_MODE_CHOICE'
-                ? intent.cardId
-                : null
-            }
-            onCardClick={handleCardClick}
-            disabled={isFinished || state.turnPhase === TurnPhase.GAME_FINISHED}
-          />
-        </div>
-        <div style={{ minWidth: 0, overflow: 'auto' }}>
+            {intent.type === 'PLAY_CARD_MODE_CHOICE' && (
+              <div
+                style={{
+                  background: '#e8f5e9',
+                  padding: '4px 8px',
+                  borderRadius: 4,
+                  fontSize: 12,
+                  display: 'flex',
+                  alignItems: 'center',
+                  marginBottom: 4,
+                  flexWrap: 'wrap',
+                  gap: 4,
+                }}
+              >
+                <span>二选一牌（{intent.moveValue}格）：选模式</span>
+                <button onClick={() => chooseMode('WIZARD')} style={{ margin: '0 4px', cursor: 'pointer' }}>巫师</button>
+                <button onClick={() => chooseMode('TOWER')} style={{ margin: '0 4px', cursor: 'pointer' }}>塔</button>
+                <button onClick={resetIntent} style={{ marginLeft: 'auto', cursor: 'pointer' }}>取消</button>
+              </div>
+            )}
+            {/* F3 弃 3 重抽触发按钮：仅 ACTION_1 阶段 + 手牌非空 + 未结束 + 不在其他 intent */}
+            {state.turnPhase === TurnPhase.ACTION_1 &&
+              intent.type === 'IDLE' &&
+              !isFinished &&
+              (state.players[current]?.hand.length ?? 0) > 0 && (
+                <div style={{ marginBottom: 4 }}>
+                  <button
+                    onClick={() => {
+                      setError(null);
+                      setSliceStart(null);
+                      setIntent({ type: 'DISCARD_REDRAW_FLOW' });
+                    }}
+                    style={{ cursor: 'pointer', fontSize: 12, padding: '2px 10px' }}
+                    title="弃 3 张重抽（可选移动一座塔前进 1 格）"
+                  >
+                    弃 3 张重抽
+                  </button>
+                </div>
+              )}
+            <HandPanel
+              state={state}
+              playerId={current}
+              selectedCardId={
+                intent.type === 'PLAY_CARD_WIZARD' || intent.type === 'PLAY_CARD_TOWER_PICK' || intent.type === 'PLAY_CARD_MODE_CHOICE'
+                  ? intent.cardId
+                  : null
+              }
+              onCardClick={handleCardClick}
+              disabled={isFinished || state.turnPhase === TurnPhase.GAME_FINISHED}
+            />
+          </div>
+
+          {/* 3. 魔法药水区（仅当前玩家） */}
+          <PotionPanel state={state} playerId={current} />
+
+          {/* 4. 法术区 */}
           <SpellPanel state={state} playerId={current} onCastSpell={handleCastSpell} />
-        </div>
-        <div style={{ minWidth: 0, overflow: 'auto' }}>
-          <LogPanel events={events as GameEvent[]} />
-        </div>
+        </aside>
       </div>
 
       {isFinished && <WinnerPanel state={state} />}
 
       {isDebugMode() && <DebugPanel state={state} dispatch={dispatch} />}
+
+      {/* 日志：角落图标（§10.6） */}
+      <LogPanel events={events as GameEvent[]} />
     </div>
   );
 }
@@ -478,25 +500,25 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
 function intentPrompt(intent: UIIntent): string {
   switch (intent.type) {
     case 'PLAY_CARD_WIZARD':
-      return `🧙 巫师牌（${intent.moveValue}格）：点击你要移动的可见巫师`;
+      return `巫师牌（${intent.moveValue}格）：点击你要移动的可见巫师`;
     case 'PLAY_CARD_TOWER_PICK':
-      return `🏰 塔牌（${intent.moveValue}格）：点击要移动的塔（该塔及以上整段移动）`;
+      return `塔牌（${intent.moveValue}格）：点击要移动的塔（该塔及以上整段移动）`;
     case 'PLAY_CARD_MODE_CHOICE':
-      return `🃏 二选一牌（${intent.moveValue}格）：选择模式`;
+      return `二选一牌（${intent.moveValue}格）：选择模式`;
     case 'CAST_SPELL_MOVE_WIZARD':
-      return `🪄 移动巫师：点击要移动的巫师`;
+      return `移动巫师：点击要移动的巫师`;
     case 'CAST_SPELL_MOVE_WIZARD_TARGET':
-      return `🪄 移动巫师：点击目标空间（高亮格）`;
+      return `移动巫师：点击目标空间（高亮格）`;
     case 'CAST_SPELL_MOVE_TOWER':
-      return `🪄 移动塔：点击要移动的塔（默认 2 格）`;
+      return `移动塔：点击要移动的塔（默认 2 格）`;
     case 'CAST_SPELL_FREE_WIZARD':
-      return `🪄 解封巫师：点击被封印的巫师（开发模式可见塔内封印标记）`;
+      return `解封巫师：点击被封印的巫师（开发模式可见塔内封印标记）`;
     case 'CAST_SPELL_SWAP_FIRST':
-      return `🪄 交换双塔：点击第一个塔堆所在空间`;
+      return `交换双塔：点击第一个塔堆所在空间`;
     case 'CAST_SPELL_SWAP_SECOND':
-      return `🪄 交换双塔：点击第二个塔堆所在空间`;
+      return `交换双塔：点击第二个塔堆所在空间`;
     case 'CAST_SPELL_NO_TARGET':
-      return `🪄 施法中...`;
+      return `施法中...`;
     default:
       return '';
   }

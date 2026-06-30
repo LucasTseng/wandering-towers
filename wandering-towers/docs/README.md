@@ -11,6 +11,7 @@
 - [00-开发任务总表.md](00-开发任务总表.md) — Phase 0–4 任务分解 + 完成标准（⚠️ 顶部含「现状勘误」指针，以基线文档为准）
 - [architecture/01-技术架构与跨平台方案.md](architecture/01-技术架构与跨平台方案.md) — 技术选型 / Mac/Windows / Docker
 - [architecture/02-开发规范与提交约定.md](architecture/02-开发规范与提交约定.md) — 规范 / 规则口径红线 / 跨平台检查清单
+- [architecture/03-UI美化与3D塔体方案.md](architecture/03-UI美化与3D塔体方案.md) — 3D 塔/巫师 + 独立可缩放舞台区（Phase U，方案设计阶段）
 - [dev-log/](dev-log/) — 逐任务开发日志（⚠️ Phase 2/3/4 历史日志存在高报进度，真实状态以基线文档 §13 为准）
 
 ### 规则与需求基线（只读引用）

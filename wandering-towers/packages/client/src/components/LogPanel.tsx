@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { GameEvent } from '@wt/shared';
 
 const EVENT_ZH: Record<string, string> = {
@@ -31,35 +31,45 @@ const EVENT_ZH: Record<string, string> = {
   INIT_COMPLETED: '初始化完成',
 };
 
-/** 行动日志面板 */
+/** 行动日志面板（§10.6）：角落图标，点击展开浮层，可收起。默认收起。 */
 export function LogPanel({ events }: { events: GameEvent[] }) {
+  const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (ref.current) ref.current.scrollTop = ref.current.scrollHeight;
-  }, [events]);
+  }, [events, open]);
 
-  const recent = events.slice(-30);
+  const recent = events.slice(-60);
+
   return (
-    <div
-      ref={ref}
-      style={{
-        border: '1px solid #aaa',
-        borderRadius: 8,
-        padding: 6,
-        background: '#fafafa',
-        height: 200,
-        overflowY: 'auto',
-        fontSize: 11,
-      }}
-    >
-      <div style={{ fontWeight: 'bold', marginBottom: 4 }}>📜 行动日志</div>
-      {recent.map((e) => (
-        <div key={e.eventId} style={{ borderBottom: '1px solid #eee', padding: '1px 0' }}>
-          <span style={{ color: '#888' }}>#{e.sequence}</span>{' '}
-          <span style={{ color: '#333' }}>{EVENT_ZH[e.type] ?? e.type}</span>{' '}
-          {e.actorPlayerId && <span style={{ color: '#666' }}>({e.actorPlayerId})</span>}
+    <>
+      <button
+        className="wt-log-icon"
+        onClick={() => setOpen((v) => !v)}
+        title="行动日志"
+        data-interactive
+      >
+        📜
+      </button>
+      {open && (
+        <div className="wt-log-panel">
+          <div className="wt-log-head">
+            <span>📜 行动日志</span>
+            <button className="wt-log-close" onClick={() => setOpen(false)} title="收起" data-interactive>
+              ✕
+            </button>
+          </div>
+          <div ref={ref} className="wt-log-body">
+            {recent.map((e) => (
+              <div key={e.eventId} className="wt-log-row">
+                <span style={{ color: '#888' }}>#{e.sequence}</span>{' '}
+                <span style={{ color: '#ddd' }}>{EVENT_ZH[e.type] ?? e.type}</span>{' '}
+                {e.actorPlayerId && <span style={{ color: '#999' }}>({e.actorPlayerId})</span>}
+              </div>
+            ))}
+          </div>
         </div>
-      ))}
-    </div>
+      )}
+    </>
   );
 }

@@ -44,6 +44,28 @@ export const SPELL_ZH_NAME: Record<string, string> = {
   REUSE_LAST_CARD: '复用上一张',
 };
 
+/** 法术用途说明（§10.3 第 4 区） */
+export const SPELL_ZH_DESC: Record<string, string> = {
+  MOVE_WIZARD_1: '将一名巫师移动 1 格',
+  MOVE_TOWER_2: '将一座塔（含其上整段）移动 2 格',
+  FREE_A_WIZARD: '解救一名被封印的巫师',
+  MOVE_RAVEN_CASTLE: '移动乌鸦城堡到相邻空间',
+  SWAP_TWO_TOWERS: '交换两座塔堆的位置',
+  DRAW_CARD: '立即抽取 1 张牌',
+  REUSE_LAST_CARD: '复用上一张打出的牌',
+};
+
+/** 标准版法术消耗药水数（§10.3 第 4 区，当前均为 1） */
+export const SPELL_POTION_COST: Record<string, number> = {
+  MOVE_WIZARD_1: 1,
+  MOVE_TOWER_2: 1,
+  FREE_A_WIZARD: 1,
+  MOVE_RAVEN_CASTLE: 1,
+  SWAP_TWO_TOWERS: 1,
+  DRAW_CARD: 1,
+  REUSE_LAST_CARD: 1,
+};
+
 /** 玩家颜色（与 PLAYER_COLORS 对齐） */
 export const PLAYER_COLORS: Record<string, string> = {
   P1: '#e74c3c',
