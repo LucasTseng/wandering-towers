@@ -29,9 +29,9 @@
 .wt-stage-viewport {
   position: relative;
   overflow: hidden;
-  aspect-ratio: 1 / 1;
+  /* 填满左侧网格单元（响应式：随浏览器宽度自动铺满），背景层与下拉均铺满此区域 */
   width: 100%;
-  max-height: 100%;
+  height: 100%;
   border-radius: 10px;
   background: radial-gradient(circle at 50% 40%, #23262f 0%, #14161c 100%);
   cursor: grab;
@@ -83,6 +83,54 @@
 }
 .wt-stage-reset:hover {
   background: rgba(0, 0, 0, 0.65);
+}
+
+/* 舞台左上角背景主题下拉（玻璃质感，亮/暗背景下均可读） */
+.wt-stage-bg-select {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  z-index: 25;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  font-size: 11px;
+  line-height: 1;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #f5e9c8;
+  backdrop-filter: blur(2px);
+  cursor: pointer;
+  user-select: none;
+}
+.wt-stage-bg-select label {
+  opacity: 0.85;
+  letter-spacing: 0.5px;
+}
+.wt-stage-bg-select select {
+  appearance: none;
+  -webkit-appearance: none;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #f5e9c8;
+  font: inherit;
+  padding-right: 14px;
+  cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, #f5e9c8 50%),
+    linear-gradient(135deg, #f5e9c8 50%, transparent 50%);
+  background-position: right 4px center, right 0px center;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+.wt-stage-bg-select select option {
+  background: #1a1d25;
+  color: #f5e9c8;
+}
+.wt-stage-bg-select:hover {
+  background: rgba(0, 0, 0, 0.6);
 }
 
 /* ---------- 棋盘地块资产：纹章与开局容量 ---------- */
