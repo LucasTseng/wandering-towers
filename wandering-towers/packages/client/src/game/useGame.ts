@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { RuleEngine } from '@wt/engine';
+import type { ExecuteResult } from '@wt/engine';
 import type {
   ActionCommand,
   GameConfig,
@@ -22,8 +23,8 @@ export interface UseGameResult {
   events: GameEvent[];
   /** 仅玩家命令产生的事件（用于 SaveGame.recordedEvents） */
   recordedEvents: GameEvent[];
-  /** 派发命令；非法操作抛 RuleError，由调用方捕获提示 */
-  dispatch: (command: ActionCommand) => void;
+  /** 派发命令；非法操作抛 RuleError，由调用方捕获提示。成功时返回引擎结算结果（含事件流） */
+  dispatch: (command: ActionCommand) => ExecuteResult;
   /** 当前局是否已结束 */
   isFinished: boolean;
   /** 导出当前对局为 SaveGame（用于回放） */
@@ -54,7 +55,7 @@ export function useGame(config: GameConfig, seed: number): UseGameResult {
   const [tick, setTick] = useState(0);
 
   const dispatch = useCallback(
-    (command: ActionCommand) => {
+    (command: ActionCommand): ExecuteResult => {
       const fullCommand: ActionCommand = {
         ...command,
         commandId: command.commandId || nextCommandId(command.playerId),
@@ -65,6 +66,7 @@ export function useGame(config: GameConfig, seed: number): UseGameResult {
       setIsFinished(engine.state.turnPhase === 'GAME_FINISHED');
       // tick 触发重渲染；下面 state 的 useMemo 依赖 tick 会重新浅拷贝 engine.state
       setTick((t) => t + 1);
+      return result;
     },
     [engine],
   );

@@ -33,6 +33,16 @@ export function defaultConfig(playerCount = 2): GameConfig {
   };
 }
 
+/**
+ * 临时隐藏的法术（交互复杂/未完善，先从法术面板移除，待后续修复后移出此集合）。
+ * 引擎层实现与 availableSpells 不变，仅 UI 不展示，便于随时恢复。
+ */
+export const HIDDEN_SPELLS: ReadonlySet<SpellID> = new Set<SpellID>([
+  'SWAP_TWO_TOWERS',
+  'DRAW_CARD',
+  'REUSE_LAST_CARD',
+]);
+
 /** 法术中文名映射（UI 展示） */
 export const SPELL_ZH_NAME: Record<string, string> = {
   MOVE_WIZARD_1: '移动巫师',

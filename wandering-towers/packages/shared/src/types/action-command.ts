@@ -26,7 +26,7 @@ export interface DiscardRedrawPayload {
  * 不同法术使用不同字段子集；全部可选，由各法术的 canCast 校验所需字段。
  * - MOVE_WIZARD_1：wizardId + targetSpaceIndex
  * - MOVE_TOWER_2：towerSourceSpaceIndex + pickedTowerId + steps
- * - FREE_A_WIZARD：imprisonedWizardId
+ * - FREE_A_WIZARD：towerSourceSpaceIndex + pickedTowerId（点击一座塔；引擎检查该塔堆下是否有己方封印巫师）
  * - MOVE_RAVEN_CASTLE：无目标
  * - SWAP_TWO_TOWERS：spaceIndex1 + spaceIndex2
  * - DRAW_CARD：无目标

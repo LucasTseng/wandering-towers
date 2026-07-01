@@ -29,6 +29,7 @@ const PHASE_ZH: Record<string, string> = {
   TURN_START: '回合开始',
   ACTION_1: '行动1',
   ACTION_2: '行动2',
+  ACTION_DONE: '行动完毕',
   TURN_END: '回合结束',
   GAME_END_PENDING: '终局待结算',
   GAME_FINISHED: '游戏结束',

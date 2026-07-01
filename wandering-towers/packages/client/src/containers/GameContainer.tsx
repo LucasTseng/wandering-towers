@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ActionCommand, CardID, GameEvent, MovementCardDefinition, PlayerID, SpaceIndex, SpellID, TowerID, WizardID } from '@wt/shared';
 import { RuleError } from '@wt/engine';
+import type { ExecuteResult } from '@wt/engine';
 import { MovementCardType, TurnPhase, WizardStateType } from '@wt/shared';
 import { clockwiseSpace, isWizardVisible, wizardsOfPlayer } from '@wt/engine';
 import { useGame } from '../game/useGame';
@@ -29,7 +30,6 @@ type UIIntent =
   // 等待点塔
   | { type: 'PLAY_CARD_TOWER_PICK'; cardId: CardID; moveValue: number; locked: boolean; chosenMode?: 'WIZARD' | 'TOWER' | undefined }
   | { type: 'CAST_SPELL_MOVE_WIZARD'; spellId: SpellID }
-  | { type: 'CAST_SPELL_MOVE_WIZARD_TARGET'; spellId: SpellID; wizardId: WizardID }
   | { type: 'CAST_SPELL_MOVE_TOWER'; spellId: SpellID }
   | { type: 'CAST_SPELL_FREE_WIZARD'; spellId: SpellID }
   | { type: 'CAST_SPELL_SWAP_FIRST'; spellId: SpellID }
@@ -41,6 +41,7 @@ const PHASE_LABEL: Record<string, string> = {
   TURN_START: '回合开始',
   ACTION_1: '行动 1',
   ACTION_2: '行动 2',
+  ACTION_DONE: '行动完毕',
   TURN_END: '回合结束',
   GAME_END_PENDING: '终局待结算',
   GAME_FINISHED: '游戏结束',
@@ -72,16 +73,16 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  /** 安全派发：捕获 RuleError 显示提示 */
-  const safeDispatch = useCallback((cmd: ActionCommand) => {
+  /** 安全派发：捕获 RuleError 显示提示。成功返回引擎结算结果（含事件流），失败返回 null */
+  const safeDispatch = useCallback((cmd: ActionCommand): ExecuteResult | null => {
     try {
-      dispatch(cmd);
+      const result = dispatch(cmd);
       setError(null);
-      return true;
+      return result;
     } catch (e) {
       const msg = e instanceof RuleError ? e.code : (e as Error).message;
       setError(msg);
-      return false;
+      return null;
     }
   }, [dispatch]);
 
@@ -139,6 +140,24 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
     }
   }, [intent]);
 
+  /**
+   * 无合法目标时"继续出牌"：掷骰锁定后若场上无巫师/塔可选，无法取消会卡死。
+   * 出口 = 不带目标发 PLAY_CARD，引擎走「无合法目标 -> 行动消耗」路径
+   * （play-card.ts: card 已 emit CARD_DISCARDED，再 advanceOrEndTurn），本牌作废、推进下一步。
+   */
+  const handleContinueNoTarget = useCallback(() => {
+    if (intent.type !== 'PLAY_CARD_WIZARD' && intent.type !== 'PLAY_CARD_TOWER_PICK') return;
+    const ok = safeDispatch(
+      castCmd(current, 'PLAY_CARD', {
+        cardId: intent.cardId,
+        resolvedMoveValue: intent.moveValue,
+        // 二选一牌需要传 chosenMode；不带 wizardId / 塔目标
+        ...(intent.chosenMode ? { chosenMode: intent.chosenMode } : {}),
+      }),
+    );
+    if (ok) resetIntent();
+  }, [intent, current, safeDispatch, resetIntent]);
+
   // ---------- 棋盘点击 ----------
   const handleWizardClick = useCallback((wizardId: WizardID) => {
     setError(null);
@@ -154,29 +173,26 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
       );
       if (ok) resetIntent();
     } else if (intent.type === 'CAST_SPELL_MOVE_WIZARD') {
-      setIntent({ type: 'CAST_SPELL_MOVE_WIZARD_TARGET', spellId: intent.spellId, wizardId });
-    } else if (intent.type === 'CAST_SPELL_FREE_WIZARD') {
-      const ok = safeDispatch(
-        castCmd(current, 'CAST_SPELL', {
-          spellId: intent.spellId,
-          targetDecision: { imprisonedWizardId: wizardId },
-        }),
-      );
-      if (ok) resetIntent();
+      // MOVE_WIZARD_1：顺时针 1 格，目标唯一确定 -> 点巫师即自动施法。
+      // 不再让玩家点目标格：目标格若有塔/巫师会拦截 onSpaceClick，导致法术卡死。
+      const w = state.wizards[wizardId];
+      if (w && (w.state.mode === WizardStateType.ON_GROUND || w.state.mode === WizardStateType.ON_TOWER_TOP)) {
+        const fromIdx = (w.state as { spaceIndex: number }).spaceIndex;
+        const targetSpaceIndex = clockwiseSpace(fromIdx, 1, state.board.spaces.length);
+        const ok = safeDispatch(
+          castCmd(current, 'CAST_SPELL', {
+            spellId: intent.spellId,
+            targetDecision: { wizardId, targetSpaceIndex },
+          }),
+        );
+        if (ok) resetIntent();
+      }
     }
-  }, [intent, current, safeDispatch, resetIntent]);
+  }, [intent, current, state, safeDispatch, resetIntent]);
 
   const handleSpaceClick = useCallback((spaceIndex: SpaceIndex) => {
     setError(null);
-    if (intent.type === 'CAST_SPELL_MOVE_WIZARD_TARGET') {
-      const ok = safeDispatch(
-        castCmd(current, 'CAST_SPELL', {
-          spellId: intent.spellId,
-          targetDecision: { wizardId: intent.wizardId, targetSpaceIndex: spaceIndex },
-        }),
-      );
-      if (ok) resetIntent();
-    } else if (intent.type === 'CAST_SPELL_SWAP_FIRST') {
+    if (intent.type === 'CAST_SPELL_SWAP_FIRST') {
       setIntent({ type: 'CAST_SPELL_SWAP_SECOND', spellId: intent.spellId, spaceIndex1: spaceIndex });
     } else if (intent.type === 'CAST_SPELL_SWAP_SECOND') {
       const ok = safeDispatch(
@@ -223,6 +239,20 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
         }),
       );
       if (ok) resetIntent();
+    } else if (intent.type === 'CAST_SPELL_FREE_WIZARD') {
+      // FREE_A_WIZARD：点击一座塔，引擎检查该塔堆下是否有己方封印巫师。
+      // 命中才解救；点错塔药水照扣、不解救，只有 1 次机会。
+      const result = safeDispatch(
+        castCmd(current, 'CAST_SPELL', {
+          spellId: intent.spellId,
+          targetDecision: { towerSourceSpaceIndex: spaceIndex, pickedTowerId: towerId },
+        }),
+      );
+      if (result) {
+        const rescued = result.events.some((e) => e.type === 'WIZARD_RELEASED');
+        if (!rescued) setError('解救失败：该塔下没有你的巫师，药水已消耗');
+        resetIntent();
+      }
     }
   }, [intent, current, safeDispatch, resetIntent]);
 
@@ -259,30 +289,12 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
     }
   }, [safeDispatch, resetIntent, state.currentPlayerId]);
 
-  // 计算合法目标空间高亮（巫师牌：当前玩家可见巫师所在格 + 顺时针落点）
-  const targetSpaces = useMemo(() => {
-    const set = new Set<SpaceIndex>();
-    if (intent.type === 'CAST_SPELL_MOVE_WIZARD_TARGET') {
-      const w = state.wizards[intent.wizardId];
-      if (w && w.state.mode !== WizardStateType.IN_CASTLE && w.state.mode !== WizardStateType.IMPRISONED) {
-        const fromIdx = (w.state as { spaceIndex: number }).spaceIndex;
-        set.add(clockwiseSpace(fromIdx, 1, state.board.spaces.length));
-      }
-    }
-    return set;
-  }, [intent, state]);
-
   // §10.4 卡牌选中后可操作巫师高亮集合（塔不发光）。纯 client 侧按 intent + F2 过滤，不预演合法性。
   const highlightableWizards = useMemo(() => {
     const set = new Set<WizardID>();
     if (intent.type === 'PLAY_CARD_WIZARD' || intent.type === 'CAST_SPELL_MOVE_WIZARD') {
       for (const w of wizardsOfPlayer(state, current)) {
         if (isWizardVisible(w)) set.add(w.id);
-      }
-    } else if (intent.type === 'CAST_SPELL_FREE_WIZARD') {
-      // 被封印巫师：§23.1 正常对局不揭示，仅 debug 生效（UI 不渲染封印巫师，故集合无可见效果）
-      for (const w of Object.values(state.wizards)) {
-        if (w.state.mode === WizardStateType.IMPRISONED) set.add(w.id);
       }
     }
     return set;
@@ -372,24 +384,24 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
       >
         <StageViewport
           cells={cells}
-          targetSpaces={targetSpaces}
           sliceStart={sliceStart}
           highlightWizards={highlightableWizards}
           glowOff={finished}
           onWizardClick={
             intent.type === 'PLAY_CARD_WIZARD' ||
-            intent.type === 'CAST_SPELL_MOVE_WIZARD' ||
-            intent.type === 'CAST_SPELL_FREE_WIZARD'
+            intent.type === 'CAST_SPELL_MOVE_WIZARD'
               ? handleWizardClick
               : undefined
           }
           onTowerClick={
-            intent.type === 'PLAY_CARD_TOWER_PICK' || intent.type === 'CAST_SPELL_MOVE_TOWER' || intent.type === 'DISCARD_REDRAW_FLOW'
+            intent.type === 'PLAY_CARD_TOWER_PICK' ||
+            intent.type === 'CAST_SPELL_MOVE_TOWER' ||
+            intent.type === 'CAST_SPELL_FREE_WIZARD' ||
+            intent.type === 'DISCARD_REDRAW_FLOW'
               ? handleTowerClick
               : undefined
           }
           onSpaceClick={
-            intent.type === 'CAST_SPELL_MOVE_WIZARD_TARGET' ||
             intent.type === 'CAST_SPELL_SWAP_FIRST' ||
             intent.type === 'CAST_SPELL_SWAP_SECOND'
               ? handleSpaceClick
@@ -436,13 +448,30 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
                 )}
                 {(() => {
                   // locked（骰子已掷出）后不可取消，必须选目标
-                  const locked =
-                    (intent.type === 'PLAY_CARD_WIZARD' || intent.type === 'PLAY_CARD_TOWER_PICK') && intent.locked;
-                  return !locked ? (
-                    <button onClick={resetIntent} style={{ marginLeft: 'auto', cursor: 'pointer' }}>取消</button>
-                  ) : (
-                    <span style={{ marginLeft: 'auto', color: '#888' }}>已锁定</span>
-                  );
+                  const isWizardIntent = intent.type === 'PLAY_CARD_WIZARD';
+                  const isTowerIntent = intent.type === 'PLAY_CARD_TOWER_PICK';
+                  const locked = (isWizardIntent || isTowerIntent) && intent.locked;
+                  if (!locked) {
+                    return (
+                      <button onClick={resetIntent} style={{ marginLeft: 'auto', cursor: 'pointer' }}>取消</button>
+                    );
+                  }
+                  // 锁定后若无合法目标（己方无可见巫师 / 场上无塔），提供"继续出牌"作废本牌出口
+                  const noTarget =
+                    (isWizardIntent && highlightableWizards.size === 0) ||
+                    (isTowerIntent && !state.board.spaces.some((s) => s.towerStack.length > 0));
+                  if (noTarget) {
+                    return (
+                      <button
+                        onClick={handleContinueNoTarget}
+                        title="无合法目标，本牌作废并推进到下一步"
+                        style={{ marginLeft: 'auto', cursor: 'pointer' }}
+                      >
+                        继续出牌（本牌作废）
+                      </button>
+                    );
+                  }
+                  return <span style={{ marginLeft: 'auto', color: '#888' }}>已锁定</span>;
                 })()}
               </div>
             )}
@@ -523,7 +552,11 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
                   : null
               }
               onCardClick={handleCardClick}
-              disabled={isFinished || state.turnPhase === TurnPhase.GAME_FINISHED}
+              disabled={
+                isFinished ||
+                state.turnPhase === TurnPhase.GAME_FINISHED ||
+                state.turnPhase === TurnPhase.ACTION_DONE
+              }
             />
           </div>
 
@@ -532,6 +565,33 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
 
           {/* 4. 法术区 */}
           <SpellPanel state={state} playerId={current} onCastSpell={handleCastSpell} />
+
+          {/* 5. 结束回合（操作区最下方）——打完牌后不再自动结束，由玩家显式结束 */
+            !isFinished &&
+            (state.turnPhase === TurnPhase.ACTION_1 ||
+              state.turnPhase === TurnPhase.ACTION_2 ||
+              state.turnPhase === TurnPhase.ACTION_DONE) && (
+              <button
+                onClick={() => {
+                  resetIntent();
+                  safeDispatch(castCmd(current, 'END_TURN', {}));
+                }}
+                title="结束本回合（补牌并轮转到下一玩家）"
+                style={{
+                  padding: '8px 10px',
+                  cursor: 'pointer',
+                  background: '#c0392b',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 6,
+                  fontSize: 13,
+                  fontWeight: 'bold',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                }}
+              >
+                结束回合
+              </button>
+            )}
         </aside>
       </div>
 
@@ -556,13 +616,11 @@ function intentPrompt(intent: UIIntent): string {
     case 'PLAY_CARD_MODE_CHOICE':
       return `二选一牌：选择模式`;
     case 'CAST_SPELL_MOVE_WIZARD':
-      return `移动巫师：点击要移动的巫师`;
-    case 'CAST_SPELL_MOVE_WIZARD_TARGET':
-      return `移动巫师：点击目标空间（高亮格）`;
+      return `移动巫师：点击你要移动的己方巫师（顺时针 1 格）`;
     case 'CAST_SPELL_MOVE_TOWER':
       return `移动塔：点击要移动的塔（默认 2 格）`;
     case 'CAST_SPELL_FREE_WIZARD':
-      return `解封巫师：点击被封印的巫师（开发模式可见塔内封印标记）`;
+      return `解封巫师：点击一座塔——若塔下藏有你的巫师则解救到塔顶，否则药水照扣（仅 1 次机会）`;
     case 'CAST_SPELL_SWAP_FIRST':
       return `交换双塔：点击第一个塔堆所在空间`;
     case 'CAST_SPELL_SWAP_SECOND':

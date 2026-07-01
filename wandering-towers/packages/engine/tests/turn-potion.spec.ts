@@ -60,11 +60,11 @@ describe('TC-TURN / TC-CARD 回合与行动', () => {
     }
   });
 
-  it('TC-TURN-001: 正常两次行动后进入 TURN_END 并补牌、轮转到 P2', () => {
+  it('TC-TURN-001: 两次行动后进入 ACTION_DONE（不自动结束），显式 END_TURN 后补牌、轮转到 P2', () => {
     const engine = mkEngine();
     const [c1, c2] = setFixedTowerHand(engine, 'P1', 2);
     // 第一张：space 1 的 T01 前进 2 格到 space 3
-    const r1 = engine.execute(
+    engine.execute(
       cmd('P1', 'PLAY_CARD', { cardId: c1, chosenMode: 'TOWER', towerSourceSpaceIndex: 1, pickedTowerId: 'T01' }),
     );
     expect(engine.state.turnPhase).toBe(TurnPhase.ACTION_2);
@@ -72,7 +72,15 @@ describe('TC-TURN / TC-CARD 回合与行动', () => {
     const r2 = engine.execute(
       cmd('P1', 'PLAY_CARD', { cardId: c2, chosenMode: 'TOWER', towerSourceSpaceIndex: 3, pickedTowerId: 'T01' }),
     );
-    expect(r2.endTurn).toBe(true);
+    // 打完两张牌不再自动结束回合，停在 ACTION_DONE 施法窗口，仍是 P1，手牌未补
+    expect(r2.endTurn).toBe(false);
+    expect(engine.state.turnPhase).toBe(TurnPhase.ACTION_DONE);
+    expect(engine.state.currentPlayerId).toBe('P1');
+    expect(engine.state.players['P1']!.hand).toHaveLength(1);
+    assertInvariants(engine.state);
+    // 显式结束回合后才补牌、轮转
+    const r3 = engine.execute(cmd('P1', 'END_TURN', {}));
+    expect(r3.endTurn).toBe(true);
     expect(engine.state.currentPlayerId).toBe('P2');
     expect(engine.state.turnPhase).toBe(TurnPhase.ACTION_1);
     expect(engine.state.players['P1']!.hand).toHaveLength(3);

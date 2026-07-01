@@ -39,7 +39,12 @@ export function castSpell(
     throw new RuleError(RuleErrorCode.NOT_CURRENT_PLAYER, `current=${state.currentPlayerId}, got ${playerId}`);
   }
   // 1.2 时机：ACTIVE_ONLY，行动阶段可施法（V4 §13.5 BEFORE_DURING_AFTER_ACTION + V2 §17.2）
-  if (state.turnPhase !== TurnPhase.ACTION_1 && state.turnPhase !== TurnPhase.ACTION_2) {
+  // ACTION_DONE 为两个行动用尽后的施法窗口，同样允许施法（V2 §17.2 行动后可施法）
+  if (
+    state.turnPhase !== TurnPhase.ACTION_1 &&
+    state.turnPhase !== TurnPhase.ACTION_2 &&
+    state.turnPhase !== TurnPhase.ACTION_DONE
+  ) {
     throw new RuleError(RuleErrorCode.INVALID_PHASE, `不能在 ${state.turnPhase} 阶段施法`);
   }
 

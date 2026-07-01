@@ -28,7 +28,7 @@ import { maybeFillOnePotionForImprisonment } from './potion';
  *  4. 弃牌 + 发 CARD_PLAYED
  *  5. 巫师模式 -> moveWizardExact；塔模式 -> moveTowerSegment
  *  6. 进堡 -> 城堡移动 + 立即结束回合
- *  7. 否则推进 phase（ACTION_1 -> ACTION_2 -> TURN_END）
+ *  7. 否则推进 phase（ACTION_1 -> ACTION_2 -> ACTION_DONE 施法窗口，不自动结束回合）
  *
  * 返回 { endTurn, endgameTriggered } 给引擎层做回合清理。
  *

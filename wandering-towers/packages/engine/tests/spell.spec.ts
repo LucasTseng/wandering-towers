@@ -3,7 +3,7 @@ import { RuleEngine } from '../src/rule-engine';
 import { RuleError } from '../src/rule-error';
 import { RuleErrorCode, WizardStateType } from '@wt/shared';
 import { customConfig } from './fixtures';
-import { placeWizardOnGround, setPotions, setSingleTower, clearSpace } from './helpers';
+import { placeWizardOnGround, setPotions, setSingleTower, clearSpace, imprisonWizard, stackTowers } from './helpers';
 import type { ActionCommand, GameState } from '@wt/shared';
 
 const ALL_SPELLS = [
@@ -36,6 +36,13 @@ function giveFullPotions(state: GameState, playerId = 'P1', fullCount = 6): void
   setPotions(state, playerId, states as GameState['potions'][string]['state'][]);
 }
 
+/** 统计某玩家已消耗（SPENT）的药水数 */
+function spentPotions(engine: RuleEngine, playerId = 'P1'): number {
+  return engine.state.players[playerId]!.potionIds.filter(
+    (p) => engine.state.potions[p]!.state === 'SPENT',
+  ).length;
+}
+
 describe('TC-SPELL 法术系统', () => {
   it('TC-SPELL-001: 每回合施法上限 -> 第二次 SPELL_LIMIT_REACHED', () => {
     const engine = mkEngine(['MOVE_RAVEN_CASTLE'], 1);
@@ -52,14 +59,16 @@ describe('TC-SPELL 法术系统', () => {
     }
   });
 
-  it('TC-SPELL-002/003: ACTION_1 / ACTION_2 阶段均可施法', () => {
-    for (const phase of ['ACTION_1', 'ACTION_2'] as const) {
+  it('TC-SPELL-002/003: ACTION_1 / ACTION_2 / ACTION_DONE 阶段均可施法', () => {
+    for (const phase of ['ACTION_1', 'ACTION_2', 'ACTION_DONE'] as const) {
       const engine = mkEngine(['MOVE_RAVEN_CASTLE']);
       giveFullPotions(engine.state);
-      engine.state.turnPhase = phase;
+      engine.state.turnPhase = phase as GameState['turnPhase'];
       const r = engine.execute(cmd('P1', 'MOVE_RAVEN_CASTLE', {}));
       expect(r.success).toBe(true);
       expect(r.events.some((e) => e.type === 'SPELL_CAST')).toBe(true);
+      // ACTION_DONE 施法不应结束回合（仍待玩家显式 END_TURN）
+      expect(r.endTurn).toBe(false);
     }
   });
 
@@ -164,28 +173,97 @@ describe('TC-SPELL 法术系统', () => {
 });
 
 describe('TC-SPELL 各法术集成', () => {
-  it('FREE_A_WIZARD: 解封被封印巫师到塔顶', () => {
+  it('FREE_A_WIZARD: 点击封印己方巫师的塔 -> 解救到塔堆顶端', () => {
     const engine = mkEngine(['FREE_A_WIZARD']);
     giveFullPotions(engine.state);
     const wid = engine.state.players['P1']!.wizardIds[0]!;
     const towerId = 'T02';
-    // 封印该巫师到 T02（T02 在某空间）
     const towerSpace = engine.state.board.spaces.findIndex((s) => s.towerStack.includes(towerId));
-    engine.state.wizards[wid]!.state = { mode: WizardStateType.IMPRISONED, spaceIndex: towerSpace, insideTowerId: towerId, sealedAs: 'COVERED_TOWER' };
-    engine.state.towers[towerId]!.imprisonedWizards.push(wid);
-    const r = engine.execute(cmd('P1', 'FREE_A_WIZARD', { imprisonedWizardId: wid }));
+    // 封印 P1 的巫师到 T02
+    imprisonWizard(engine.state, wid, towerSpace, towerId, 'COVERED_TOWER');
+    const r = engine.execute(
+      cmd('P1', 'FREE_A_WIZARD', { towerSourceSpaceIndex: towerSpace, pickedTowerId: towerId }),
+    );
     expect(r.success).toBe(true);
-    expect(engine.state.wizards[wid]!.state.mode).toBe(WizardStateType.ON_TOWER_TOP);
-    expect(engine.state.towers[towerId]!.imprisonedWizards).not.toContain(wid);
     expect(r.events.some((e) => e.type === 'WIZARD_RELEASED')).toBe(true);
+    // 解救到该塔堆顶端（顶塔上），且从封印登记移除
+    expect(engine.state.wizards[wid]!.state).toMatchObject({
+      mode: WizardStateType.ON_TOWER_TOP,
+      spaceIndex: towerSpace,
+      topTowerId: towerId,
+    });
+    expect(engine.state.towers[towerId]!.imprisonedWizards).not.toContain(wid);
+    // 药水消耗 1 瓶
+    expect(spentPotions(engine, 'P1')).toBe(1);
   });
 
-  it('FREE_A_WIZARD: 目标未被封印 -> INVALID_SPELL_TARGET', () => {
+  it('FREE_A_WIZARD: 点错塔（塔下无己方封印巫师）-> 药水消耗但不解救', () => {
+    const engine = mkEngine(['FREE_A_WIZARD']);
+    giveFullPotions(engine.state);
+    const towerId = 'T02';
+    const towerSpace = engine.state.board.spaces.findIndex((s) => s.towerStack.includes(towerId));
+    // P1 无任何被封印巫师 -> 点 T02 必然点错
+    const r = engine.execute(
+      cmd('P1', 'FREE_A_WIZARD', { towerSourceSpaceIndex: towerSpace, pickedTowerId: towerId }),
+    );
+    expect(r.success).toBe(true);
+    // 不解救：无 WIZARD_RELEASED 事件
+    expect(r.events.some((e) => e.type === 'WIZARD_RELEASED')).toBe(false);
+    // 药水仍消耗（1 瓶）
+    expect(spentPotions(engine, 'P1')).toBe(1);
+  });
+
+  it('FREE_A_WIZARD: 塔下只有对方巫师 -> 不解救（只解救己方）', () => {
+    const engine = mkEngine(['FREE_A_WIZARD']);
+    giveFullPotions(engine.state);
+    const enemyWid = engine.state.players['P2']!.wizardIds[0]!;
+    const towerId = 'T02';
+    const towerSpace = engine.state.board.spaces.findIndex((s) => s.towerStack.includes(towerId));
+    // 封印的是 P2 的巫师；P1 点击该塔 -> 不命中己方 -> 不解救
+    imprisonWizard(engine.state, enemyWid, towerSpace, towerId, 'COVERED_TOWER');
+    const r = engine.execute(
+      cmd('P1', 'FREE_A_WIZARD', { towerSourceSpaceIndex: towerSpace, pickedTowerId: towerId }),
+    );
+    expect(r.success).toBe(true);
+    expect(r.events.some((e) => e.type === 'WIZARD_RELEASED')).toBe(false);
+    expect(engine.state.wizards[enemyWid]!.state.mode).toBe(WizardStateType.IMPRISONED);
+    expect(spentPotions(engine, 'P1')).toBe(1);
+  });
+
+  it('FREE_A_WIZARD: 己方巫师封在底层被覆盖塔 -> 点顶层塔也能解救到顶端', () => {
     const engine = mkEngine(['FREE_A_WIZARD']);
     giveFullPotions(engine.state);
     const wid = engine.state.players['P1']!.wizardIds[0]!;
-    placeWizardOnGround(engine.state, wid, 5); // 地面，未封印
-    expect(() => engine.execute(cmd('P1', 'FREE_A_WIZARD', { imprisonedWizardId: wid }))).toThrow(RuleError);
+    // 在 space 10 叠 [T02(底), T03(顶)]
+    stackTowers(engine.state, 10, ['T02', 'T03']);
+    // P1 巫师封在底层 T02（被 T03 覆盖）
+    imprisonWizard(engine.state, wid, 10, 'T02', 'COVERED_TOWER');
+    // 玩家只能点到顶层 T03；引擎应检查整堆，命中底层己方巫师
+    const r = engine.execute(
+      cmd('P1', 'FREE_A_WIZARD', { towerSourceSpaceIndex: 10, pickedTowerId: 'T03' }),
+    );
+    expect(r.success).toBe(true);
+    expect(r.events.some((e) => e.type === 'WIZARD_RELEASED')).toBe(true);
+    // 解救到塔堆顶端 = T03 上
+    expect(engine.state.wizards[wid]!.state).toMatchObject({
+      mode: WizardStateType.ON_TOWER_TOP,
+      spaceIndex: 10,
+      topTowerId: 'T03',
+    });
+    expect(engine.state.towers['T02']!.imprisonedWizards).not.toContain(wid);
+  });
+
+  it('FREE_A_WIZARD: 未传塔目标 -> INVALID_SPELL_TARGET（canCast 拦截，药水未扣）', () => {
+    const engine = mkEngine(['FREE_A_WIZARD']);
+    giveFullPotions(engine.state);
+    try {
+      engine.execute(cmd('P1', 'FREE_A_WIZARD', {}));
+      throw new Error('should have thrown');
+    } catch (e) {
+      expect((e as RuleError).code).toBe(RuleErrorCode.INVALID_SPELL_TARGET);
+    }
+    // canCast 在扣药水前抛错 -> 药水未消耗
+    expect(spentPotions(engine, 'P1')).toBe(0);
   });
 
   it('MOVE_RAVEN_CASTLE: 城堡移动到下一合法乌鸦位', () => {

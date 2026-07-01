@@ -77,8 +77,11 @@ export interface ActionOutcome {
 }
 
 /**
- * 推进回合阶段：ACTION_1 -> ACTION_2；ACTION_2 -> 回合结束
- * 这是一个标准的行动收尾逻辑。
+ * 推进回合阶段：ACTION_1 -> ACTION_2；ACTION_2 -> ACTION_DONE（行动完毕）
+ *
+ * 打完第 2 张行动牌后**不再自动结束回合**，而是进入 ACTION_DONE 施法窗口：
+ * 玩家仍可施法，须显式发 END_TURN（或触发进堡）才结束回合（V2 §17.2）。
+ * 注意：进堡路径在 play-card / cast-spell 中直接返回 endTurn=true，不走本函数。
  */
 export function advanceOrEndTurn(
   state: GameState,
@@ -88,9 +91,9 @@ export function advanceOrEndTurn(
     emit('ACTION_PHASE_CHANGED', { from: state.turnPhase, to: TurnPhaseEnum.ACTION_2 });
     return { endTurn: false, endgameTriggered: false };
   }
-  // ACTION_2 -> 回合结束
-  emit('ACTION_PHASE_CHANGED', { from: state.turnPhase, to: TurnPhaseEnum.TURN_END });
-  return { endTurn: true, endgameTriggered: false };
+  // ACTION_2 -> 行动完毕（施法窗口），不自动结束回合
+  emit('ACTION_PHASE_CHANGED', { from: state.turnPhase, to: TurnPhaseEnum.ACTION_DONE });
+  return { endTurn: false, endgameTriggered: false };
 }
 
 export type { GameEvent, PlayerID, TurnPhase };

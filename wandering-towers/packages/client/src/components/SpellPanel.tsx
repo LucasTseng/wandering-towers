@@ -1,5 +1,5 @@
 import type { GameState, PlayerID, SpellID } from '@wt/shared';
-import { SPELL_ZH_DESC, SPELL_ZH_NAME, SPELL_POTION_COST } from '../game/config';
+import { SPELL_ZH_DESC, SPELL_ZH_NAME, SPELL_POTION_COST, HIDDEN_SPELLS } from '../game/config';
 
 interface SpellPanelProps {
   state: GameState;
@@ -21,7 +21,9 @@ export function SpellPanel({ state, playerId, onCastSpell }: SpellPanelProps) {
         法术（剩余 {remaining} 次 · 满瓶 {fullPotions}）
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {state.availableSpells.map((spellId) => {
+        {state.availableSpells
+          .filter((spellId) => !HIDDEN_SPELLS.has(spellId))
+          .map((spellId) => {
           const cost = SPELL_POTION_COST[spellId] ?? 1;
           const canCast = remaining > 0 && fullPotions >= cost;
           return (
