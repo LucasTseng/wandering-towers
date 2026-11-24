@@ -10,9 +10,7 @@
   },
   "scripts": {
     "dev": "pnpm --filter @wt/client dev",
-    "dev:three": "pnpm --filter @wt/three-client dev",
     "build": "pnpm -r --stream run build",
-    "build:three": "pnpm --filter @wt/three-client build",
     "typecheck": "pnpm -r --stream run typecheck",
     "lint": "eslint . --ext .ts,.tsx",
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",

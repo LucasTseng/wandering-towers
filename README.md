@@ -2,6 +2,10 @@
 
 本地数字版（标准版）。**当前状态：Phase 0-4 全部完成，可玩**。Phase 5 联机按需延后。
 
+> **主线版本**：Three.js 三维版（`wandering-towers/packages/client`）。
+> 第一版 CSS 3D 实现已于 2026-11-24 归档封存至 `wandering-towers/archive/v1-css3d-client`，
+> 仅作参考、不再启用，详见 [`archive/README.md`](wandering-towers/archive/README.md)。
+
 > ⚠️ 本目录的 6 份历史 md（V2 规则/V2 需求/V4 总控 + 附件一/二/三）是**历史快照**，用于离线参考。
 > **真实项目状态、文档体系、阅读入口**全部在 [`wandering-towers/docs/README.md`](wandering-towers/docs/README.md)。
 > 设计/代码冲突时，以 [`wandering-towers/docs/开发设计文档-架构与实现基线.md`](wandering-towers/docs/开发设计文档-架构与实现基线.md)（⭐ 单一事实来源）为裁定依据。

@@ -1,16 +1,8 @@
-import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
-import './styles/phase-u.css';
-import './styles/visual-assets.css';
+import './styles/three.css';
 
 const rootEl = document.getElementById('root');
 if (!rootEl) throw new Error('#root not found');
 
-createRoot(rootEl).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-);
-
-export const CLIENT_VERSION = '0.1.0';
+createRoot(rootEl).render(<App />);

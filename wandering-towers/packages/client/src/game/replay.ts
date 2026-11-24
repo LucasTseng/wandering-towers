@@ -4,7 +4,7 @@
  * engine 那个负责"一次性重建最终状态"。
  */
 import { buildInitialState, applyEvent } from '@wt/engine';
-import type { GameEvent, GameState, SaveGame } from '@wt/shared';
+import type { GameState, SaveGame } from '@wt/shared';
 
 /** 从 SaveGame 构造初始状态（未应用任何事件） */
 export function buildInitialReplayState(save: SaveGame): GameState {

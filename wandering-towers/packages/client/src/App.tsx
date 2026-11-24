@@ -1,38 +1,11 @@
-import { useState } from 'react';
-import { GameContainer } from './containers/GameContainer';
-import { ReplayLauncher } from './components/ReplayView';
-import type { SaveGame } from '@wt/shared';
+import { ThreeGameContainer } from './containers/ThreeGameContainer';
 
 /**
- * 前端入口 — 本地可玩 MVP + 回放模式（Phase C + Phase D）
+ * 三维版入口。
  *
- * 模式：
- *  - 'live'：正常对局（GameContainer）
- *  - 'replay-load'：从文件加载回放（ReplayLauncher）
- *  - 'replay-view'：进入回放视图（ReplayLauncher 内嵌 ReplayView）
- *
- * 详见 docs/开发设计文档-架构与实现基线.md §12/§14 Phase D。
+ * 与 `@wt/client` 共用 @wt/engine 与 @wt/shared：
+ * 规则、命令、终局判定、法术实现一行未改，只替换渲染层与界面皮肤。
  */
-type Mode = 'live' | 'replay-load' | 'replay-view';
-
 export function App() {
-  const [mode, setMode] = useState<Mode>('live');
-  const [loadedSave] = useState<SaveGame | null>(null);
-
-  if (mode === 'replay-load' || mode === 'replay-view') {
-    return (
-      <ReplayLauncher
-        save={null}
-        onExit={() => {
-          setMode('live');
-        }}
-      />
-    );
-  }
-
-  return (
-    <GameContainer
-      onEnterReplay={() => setMode('replay-load')}
-    />
-  );
+  return <ThreeGameContainer />;
 }

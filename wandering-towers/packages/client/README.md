@@ -1,38 +1,37 @@
-# @wt/three-client · 巫师飞塔三维版
+# @wt/client · 巫师飞塔（Three.js 三维版 · 主线）
 
-经典版 `@wt/client` 的**渲染层分支**：同一套规则引擎、同一套命令与终局判定，
-只替换表现层（Three.js 场景 + 羊皮纸界面）。
+本仓库的**唯一主线**：Three.js WebGL 场景 + 羊皮纸界面。
+同一套规则引擎、同一套命令与终局判定，渲染层与界面皮肤为本包自有实现。
+
+> 2026-11-24 起，原经典 CSS 3D 版已归档至 [`archive/v1-css3d-client`](../../archive/README.md)，
+> 不再启用、不参与构建，仅作第一版实现参考。
 
 ## 启动
 
 ```bash
 # 仓库根目录
 pnpm install
-pnpm dev:three        # http://localhost:8009
+pnpm dev              # http://localhost:8008
 ```
-
-经典版仍在 `pnpm dev` → http://localhost:8008，两者可同时运行。
 
 生产构建与本地预览：
 
 ```bash
-pnpm build:three                          # tsc --noEmit && vite build → dist/
-pnpm --filter @wt/three-client preview    # 预览生产包 → http://localhost:4173
+pnpm build                                  # 仓库根目录，构建全部 workspace 包
+pnpm --filter @wt/client build               # 仅构建本包 → dist/
+pnpm --filter @wt/client preview             # 预览生产包 → http://localhost:4173
 ```
 
-> 若 `dist/` 已存在且构建报 `[safe-delete] 操作失败`，是沙箱把 `emptyOutDir` 的删除
-> 拦到了回收站，不是代码问题 —— 先手动删掉 `dist/` 再构建即可。
+## 分层职责
 
-## 与经典版的关系
-
-| 层 | 经典版 | 三维版 |
+| 层 | 归属 | 说明 |
 | --- | --- | --- |
-| 规则引擎 | `@wt/engine` | **同一个包，未改一行** |
-| 类型/地图/牌库/法术定义 | `@wt/shared` | 同一个包 |
-| 状态连接 | `useGame` + `UIIntent` 状态机 | 复制同一套逻辑（`src/game`、`src/containers`） |
-| 渲染 | CSS 3D + 素材台 | Three.js WebGL（`src/scene`） |
-| 界面皮肤 | `visual-assets.css` | `styles/three.css`（羊皮纸 + 金饰） |
-| 回放 | `ReplayView`（2D 棋盘） | `ReplayPanel` + 同一 3D 舞台 |
+| 规则引擎 | `@wt/engine` | 与前端解耦，纯逻辑，前端未改一行 |
+| 类型/地图/牌库/法术定义 | `@wt/shared` | 与规则引擎共用 |
+| 状态连接 | 本包 `src/game`、`src/containers` | `useGame` + `UIIntent` 状态机 |
+| 渲染 | 本包 `src/scene` | Three.js WebGL（真几何 + PBR 材质 + 光照阴影） |
+| 界面皮肤 | 本包 `styles/three.css` | 羊皮纸 + 金饰 |
+| 回放 | `ReplayPanel` + 同一 3D 舞台 | 与对局共用同一 WebGL 实例 |
 
 ## 目录
 
@@ -84,7 +83,7 @@ public/textures/  CC0 大块砂岩（仅棋盘侧壁）
 DEV 环境可用 URL 参数压测极端堆叠：
 
 ```
-http://localhost:8009/?stress=9&space=8
+http://localhost:8008/?stress=9&space=8
 ```
 
 （`space` 是 0–15 的地块序号，0 在正后方顺时针递增。）
