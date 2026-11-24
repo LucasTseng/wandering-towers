@@ -84,3 +84,7 @@ wandering-towers/
 ```
 
 详见 [docs/README.md](docs/README.md)。
+
+> **UI 迭代方向**：界面将从 340px 单列侧栏改为「Z 轴分层 + 四角 HUD」，
+> 设计见 [`docs/architecture/08-UI纵深交互方案.md`](docs/architecture/08-UI纵深交互方案.md)，
+> 原型 `docs/prototypes/depth-ui-demo.html`。当前代码仍为侧栏布局，尚未实施。

@@ -1,0 +1,1585 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>巫师飞塔 · 纵深交互 Demo</title>
+<style>
+  :root{
+    --ink:#39372d; --ink-soft:#706a58; --ink-faint:#948b73;
+    --parchment:#efe2bf; --parchment-light:#fbf1d5; --parchment-deep:#dbc69a;
+    --panel-border:#a48856; --gold:#c3943d; --gold-bright:#e4b95f;
+    --teal:#2d7f88; --teal-deep:#1d5863; --wine:#ad4f39; --green:#3b8b5b;
+    --serif:Georgia,'Songti SC','STSong',serif;
+    --sans:'PingFang SC','Hiragino Sans GB',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden;background:#12232a}
+  body{font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased;user-select:none}
+  #stage{position:fixed;inset:0}
+  canvas{display:block}
+
+  .hud{position:fixed;inset:0;pointer-events:none;z-index:5}
+  .panel{
+    position:absolute;
+    background:linear-gradient(178deg,rgba(251,241,213,.95),rgba(239,226,191,.93) 62%,rgba(219,198,154,.92));
+    border:1px solid var(--panel-border);
+    border-radius:12px;
+    box-shadow:0 14px 34px rgba(12,24,26,.36),inset 0 1px 0 rgba(255,252,238,.75),inset 0 0 0 1px rgba(196,148,61,.24);
+    backdrop-filter:blur(6px) saturate(1.05);
+  }
+  .panel::after{content:'';position:absolute;inset:3px;border-radius:9px;border:.5px solid rgba(164,136,86,.38);pointer-events:none}
+
+  .plaque{left:20px;top:18px;padding:9px 16px 11px;min-width:252px}
+  .plaque .kick{font-family:var(--serif);font-size:9px;letter-spacing:2.4px;color:#9c8a63}
+  .plaque .ttl{margin-top:3px;font-family:var(--serif);font-size:18px;font-weight:600;letter-spacing:1.6px;color:#3f4b40}
+  .plaque .sub{margin-top:3px;font-size:11px;color:#7d8471;letter-spacing:.5px}
+
+  .hint{left:50%;top:20px;transform:translateX(-50%);padding:9px 22px 10px;min-width:380px;text-align:center}
+  .hint .step{font-family:var(--serif);font-size:10px;letter-spacing:2.6px;color:#9a7c42}
+  .hint .text{margin-top:4px;font-size:14px;color:#4a4436;letter-spacing:.3px}
+  .hint .text b{color:#8a5c14;font-weight:600}
+
+  .turn{right:20px;top:18px;padding:9px 14px 11px;min-width:156px}
+  .turn .row{display:flex;align-items:baseline;justify-content:space-between;gap:14px;font-size:11px;letter-spacing:1px;color:#7d7058}
+  .turn .row strong{font-family:var(--serif);font-size:18px;color:#8a6327}
+  .turn .pips{display:flex;gap:5px;margin-top:7px}
+  .turn .pip{width:28px;height:4px;border-radius:2px;background:rgba(150,120,70,.24)}
+  .turn .pip.on{background:linear-gradient(90deg,#b8862f,var(--gold-bright))}
+  .turn .who{margin-top:8px;font-size:12px;color:var(--teal-deep);letter-spacing:.4px}
+
+  .stats{left:20px;bottom:20px;padding:9px 12px;display:flex;gap:8px}
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;
+    border:1px solid rgba(135,107,61,.3);background:rgba(255,250,235,.55);font-size:12px;color:#6b5c40}
+  .chip b{font-weight:600;color:#4a4436}
+  .dot{width:7px;height:7px;border-radius:50%}
+  .dot.full{background:var(--wine)}.dot.empty{background:#7d8c74}.dot.spell{background:var(--teal)}
+
+  .endturn{position:absolute;right:20px;bottom:20px;pointer-events:auto;cursor:pointer;
+    padding:11px 24px;border-radius:10px;font-size:14px;letter-spacing:1.2px;color:#4f4127;
+    background:linear-gradient(180deg,#f7e6bb,#dfc087);border:1px solid var(--panel-border);
+    box-shadow:0 12px 26px rgba(12,24,26,.28),inset 0 1px 0 rgba(255,255,255,.7);
+    font-family:var(--serif);transition:transform .18s,box-shadow .18s}
+  .endturn:hover{background:linear-gradient(180deg,#fdf1cd,#ead096);transform:translateY(-1px);box-shadow:0 16px 30px rgba(12,24,26,.32)}
+  .endturn:active{transform:translateY(0)}
+
+  .legend{transition:opacity .25s;left:50%;bottom:22px;transform:translateX(-50%);padding:7px 16px;font-size:12px;color:#6f6549;
+    background:rgba(251,241,213,.8);border:1px solid rgba(164,136,86,.42);border-radius:999px;
+    box-shadow:0 10px 24px rgba(12,24,26,.24);white-space:nowrap}
+  .legend b{color:#8a5c14;font-weight:600}
+
+  .popover{position:fixed;z-index:20;pointer-events:none;opacity:0;
+    transform:translate(-50%,8px) scale(.93);transform-origin:50% 0;
+    transition:opacity .24s ease,transform .32s cubic-bezier(.2,.9,.3,1.25);
+    filter:drop-shadow(0 18px 30px rgba(10,22,24,.42))}
+  .popover.on{opacity:1;transform:translate(-50%,0) scale(1);pointer-events:auto}
+  .popover .caret{width:0;height:0;margin:0 auto;border-left:9px solid transparent;border-right:9px solid transparent;border-bottom:10px solid rgba(164,136,86,.7)}
+  .popover .body{background:linear-gradient(180deg,rgba(252,243,220,.99),rgba(235,220,187,.99));
+    border:1px solid var(--panel-border);border-radius:12px;padding:12px 13px 13px;
+    box-shadow:inset 0 0 0 1px rgba(255,252,238,.7),inset 0 0 0 4px rgba(196,148,61,.13)}
+  .popover .cap{font-size:10px;letter-spacing:2px;color:#9a7c42;font-family:var(--serif);margin-bottom:9px;text-align:center}
+  .popover .opts{display:flex;gap:9px}
+  .popover button{flex:1;min-width:106px;padding:10px 14px;border-radius:8px;cursor:pointer;
+    border:1px solid rgba(164,136,86,.6);font-size:15px;letter-spacing:.6px;color:#4f4127;
+    background:linear-gradient(180deg,#fdf7e7,#ecd9b6);font-family:var(--serif);
+    transition:transform .16s,background .16s,box-shadow .16s,border-color .16s}
+  .popover button:hover{background:linear-gradient(180deg,#fffbea,#f3e4c6);border-color:var(--gold);
+    box-shadow:0 8px 18px rgba(60,44,20,.22);transform:translateY(-1px)}
+  .popover button.dim{opacity:.34;filter:saturate(.4)}
+  .popover .dice-row{display:none;margin-top:10px;padding-top:10px;border-top:1px dashed rgba(164,136,86,.45);align-items:center;justify-content:center;gap:12px}
+  .popover .dice-row.on{display:flex}
+  .dice{position:relative;width:54px;height:54px;border-radius:12px;cursor:pointer;
+    background:linear-gradient(160deg,#fbf0cf,#d9b87c);border:1px solid rgba(150,112,48,.9);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.75),0 8px 16px rgba(60,44,20,.26);
+    display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);padding:9px;gap:2px;
+    transition:transform .18s}
+  .dice:hover{transform:scale(1.07) rotate(-3deg)}
+  .dice.spin{animation:spin .5s cubic-bezier(.3,.8,.4,1)}
+  @keyframes spin{0%{transform:rotate(0) scale(1)}45%{transform:rotate(200deg) scale(1.14)}100%{transform:rotate(360deg) scale(1)}}
+  .dice span{width:7px;height:7px;border-radius:50%;background:#4b3a22;align-self:center;justify-self:center}
+  .dice-tip{font-size:13px;color:#6f6247;letter-spacing:.4px}
+  .dice-tip b{color:#8a5c14}
+
+  .tip{position:fixed;z-index:18;pointer-events:none;padding:7px 11px;border-radius:9px;opacity:0;
+    background:linear-gradient(180deg,rgba(251,241,213,.97),rgba(232,215,180,.97));
+    border:1px solid rgba(164,136,86,.7);box-shadow:0 10px 22px rgba(10,22,24,.4);
+    transition:opacity .16s;transform:translate(-50%,-140%)}
+  .tip.on{opacity:1}
+  .tip .k{font-family:var(--serif);font-size:9px;letter-spacing:2px;color:#9a7c42}
+  .tip .n{margin-top:2px;font-family:var(--serif);font-size:14px;color:#3f3120;letter-spacing:.5px}
+  .tip .m{margin-top:2px;font-size:11px;color:#7b6a4c}
+
+  .veil{position:fixed;inset:0;z-index:6;pointer-events:none;
+    background:radial-gradient(circle at 50% 44%,transparent 40%,rgba(8,20,24,.34) 100%)}
+  .grain{position:fixed;inset:0;z-index:7;pointer-events:none;opacity:.05;mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='150' height='150' filter='url(%23n)'/%3E%3C/svg%3E")}
+</style>
+</head>
+<body>
+<div id="stage"></div>
+
+<div class="hud">
+  <div class="panel plaque">
+    <div class="kick">CLOUDFIELD · RAVENREALM</div>
+    <div class="ttl">雾晨试炼场</div>
+    <div class="sub">浮空棋盘 · 第 3 轮 · 行动 1</div>
+  </div>
+
+  <div class="panel hint">
+    <div class="step">CURRENT STEP</div>
+    <div class="text" id="hintText">选择一张魔典出牌 · 或悬停左后方法术牌堆</div>
+  </div>
+
+  <div class="panel turn">
+    <div class="row"><span>当前行动</span><strong id="actionNum">1 / 2</strong></div>
+    <div class="pips"><i class="pip on"></i><i class="pip" id="pip2"></i></div>
+    <div class="who" id="whoText">P1 · 赤袍学徒</div>
+  </div>
+
+  <div class="panel stats">
+    <span class="chip"><i class="dot full"></i>满瓶 <b id="statFull">3</b></span>
+    <span class="chip"><i class="dot empty"></i>空瓶 <b id="statEmpty">1</b></span>
+    <span class="chip"><i class="dot spell"></i>法术 <b id="statSpell">2</b></span>
+  </div>
+
+  <div class="legend" id="legend">悬停<b>法术牌堆</b>可将其召至前景 · 点击<b>手牌</b>展开下一层</div>
+  <button class="endturn" id="endTurn">结束回合</button>
+</div>
+
+<div class="popover" id="popover">
+  <div class="caret"></div>
+  <div class="body">
+    <div class="cap" id="popCap">第 1 步 · 选择对象</div>
+    <div class="opts">
+      <button id="btnWizard">移动巫师</button>
+      <button id="btnTower">移动塔</button>
+    </div>
+    <div class="dice-row" id="diceRow">
+      <div class="dice" id="dice">
+        <span></span><span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span>
+      </div>
+      <div class="dice-tip">点击骰子 · 掷出 <b>4 点</b></div>
+    </div>
+  </div>
+</div>
+
+<div class="tip" id="tip">
+  <div class="k" id="tipK">TOWER</div>
+  <div class="n" id="tipN"></div>
+  <div class="m" id="tipM"></div>
+</div>
+
+<div class="veil"></div>
+<div class="grain"></div>
+
+<script type="importmap">
+{ "imports": { "three": "https://unpkg.com/three@0.152.2/build/three.module.js" } }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+/* ══════════════════ 工具 ══════════════════ */
+
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function makeCanvas(w, h) {
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  return { canvas, ctx: canvas.getContext('2d') };
+}
+
+function makeTexture(src, rx = 1, ry = 1) {
+  const t = new THREE.CanvasTexture(src);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  if (rx !== 1 || ry !== 1) {
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(rx, ry);
+  }
+  t.needsUpdate = true;
+  return t;
+}
+
+/* ══════════════════ 贴图（移植自项目 textures.ts） ══════════════════ */
+
+function createPlasterTexture(seed, colors, mossAmount) {
+  const { canvas: c, ctx } = makeCanvas(1024, 1024);
+  const random = mulberry32(seed);
+  const base = ctx.createLinearGradient(0, 0, 1024, 1024);
+  base.addColorStop(0, colors[0]);
+  base.addColorStop(0.55, colors[1]);
+  base.addColorStop(1, colors[2]);
+  ctx.fillStyle = base;
+  ctx.fillRect(0, 0, 1024, 1024);
+
+  for (let i = 0; i < 210; i++) {
+    const x = random() * 1024, y = random() * 1024, radius = 25 + random() * 165;
+    const cloud = ctx.createRadialGradient(x, y, 0, x, y, radius);
+    cloud.addColorStop(0, random() > 0.48 ? 'rgba(255,244,214,0.13)' : 'rgba(44,37,25,0.12)');
+    cloud.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = cloud;
+    ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+  }
+  for (let i = 0; i < 38; i++) {
+    const x = random() * 1024, top = random() * 460, height = 110 + random() * 430;
+    const stain = ctx.createLinearGradient(x, top, x, top + height);
+    stain.addColorStop(0, 'rgba(44,45,30,0.08)');
+    stain.addColorStop(0.5, 'rgba(44,45,30,0.025)');
+    stain.addColorStop(1, 'rgba(44,45,30,0)');
+    ctx.fillStyle = stain;
+    ctx.fillRect(x, top, 2 + random() * 14, height);
+  }
+  for (let i = 0; i < 20; i++) {
+    ctx.strokeStyle = 'rgba(49,39,26,0.18)';
+    ctx.lineWidth = 0.9 + random() * 1.3;
+    const x = random() * 1024, y = random() * 1024;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + (random() - 0.5) * 26, y + 20 + random() * 58);
+    ctx.lineTo(x + (random() - 0.5) * 45, y + 40 + random() * 95);
+    ctx.stroke();
+  }
+  for (let i = 0; i < mossAmount; i++) {
+    const x = random() * 1024, y = 550 + random() * 474, radius = 25 + random() * 80;
+    const moss = ctx.createRadialGradient(x, y, 0, x, y, radius);
+    moss.addColorStop(0, 'rgba(47,72,37,0.22)');
+    moss.addColorStop(1, 'rgba(47,72,37,0)');
+    ctx.fillStyle = moss;
+    ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+  }
+  for (let i = 0; i < 2600; i++) {
+    ctx.fillStyle = random() > 0.5 ? 'rgba(255,245,216,0.05)' : 'rgba(48,39,26,0.05)';
+    ctx.fillRect(random() * 1024, random() * 1024, 1 + random() * 2, 1 + random() * 2);
+  }
+  return makeTexture(c, 2.2, 1.4);
+}
+
+function createSkyTexture() {
+  const { canvas: c, ctx } = makeCanvas(2048, 1024);
+  const sky = ctx.createLinearGradient(0, 0, 0, 1024);
+  sky.addColorStop(0, '#1c485a');
+  sky.addColorStop(0.25, '#3d7081');
+  sky.addColorStop(0.5, '#5f8b90');
+  sky.addColorStop(0.6, '#6f958f');
+  sky.addColorStop(0.75, '#3d6166');
+  sky.addColorStop(1, '#1b333b');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, 2048, 1024);
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  const sun = ctx.createRadialGradient(310, 138, 8, 310, 138, 300);
+  sun.addColorStop(0, 'rgba(255,248,203,0.92)');
+  sun.addColorStop(0.25, 'rgba(255,231,158,0.38)');
+  sun.addColorStop(1, 'rgba(255,220,144,0)');
+  ctx.fillStyle = sun;
+  ctx.fillRect(0, 0, 900, 650);
+  ctx.restore();
+
+  const random = mulberry32(20261122);
+  const drawCloud = (cx, cy, scale, alpha) => {
+    ctx.save();
+    ctx.filter = `blur(${18 * scale}px)`;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#f3f4df';
+    for (let i = 0; i < 8; i++) {
+      const x = cx + (random() - 0.5) * 230 * scale;
+      const y = cy + (random() - 0.5) * 48 * scale;
+      const rx = (55 + random() * 115) * scale;
+      const ry = (16 + random() * 30) * scale;
+      ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  };
+  for (let i = 0; i < 14; i++) drawCloud(random() * 2048, 150 + random() * 330, 0.55 + random() * 0.8, 0.18 + random() * 0.22);
+
+  ctx.save();
+  ctx.globalAlpha = 0.45; ctx.filter = 'blur(5px)'; ctx.fillStyle = '#638983';
+  ctx.beginPath(); ctx.moveTo(0, 785);
+  for (let x = 0; x <= 2048; x += 120) ctx.lineTo(x, 715 + Math.sin(x * 0.006) * 42 + random() * 40);
+  ctx.lineTo(2048, 1024); ctx.lineTo(0, 1024); ctx.closePath(); ctx.fill();
+  ctx.globalAlpha = 0.36; ctx.fillStyle = '#435f60';
+  ctx.beginPath(); ctx.moveTo(0, 850);
+  for (let x = 0; x <= 2048; x += 80) ctx.lineTo(x, 795 + Math.sin(x * 0.011 + 1.3) * 35 + random() * 30);
+  ctx.lineTo(2048, 1024); ctx.lineTo(0, 1024); ctx.closePath(); ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  ctx.globalAlpha = 0.33; ctx.strokeStyle = '#415955'; ctx.lineWidth = 2;
+  for (let i = 0; i < 9; i++) {
+    const x = 730 + random() * 900, y = 300 + random() * 240, s = 5 + random() * 6;
+    ctx.beginPath();
+    ctx.moveTo(x - s, y);
+    ctx.quadraticCurveTo(x - s * 0.35, y - s * 0.55, x, y);
+    ctx.quadraticCurveTo(x + s * 0.35, y - s * 0.55, x + s, y);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  const t = makeTexture(c);
+  t.mapping = THREE.EquirectangularReflectionMapping;
+  return t;
+}
+
+function createBoardTexture() {
+  const { canvas: c, ctx } = makeCanvas(2048, 2048);
+  const random = mulberry32(734921);
+  ctx.fillStyle = '#8c7f55';
+  ctx.fillRect(0, 0, 2048, 2048);
+  ctx.save();
+  ctx.beginPath(); ctx.arc(1024, 1024, 1014, 0, Math.PI * 2); ctx.clip();
+
+  const base = ctx.createRadialGradient(860, 780, 40, 1024, 1024, 1040);
+  base.addColorStop(0, '#8ca24f');
+  base.addColorStop(0.46, '#647f39');
+  base.addColorStop(0.78, '#3f592a');
+  base.addColorStop(1, '#5d4f32');
+  ctx.fillStyle = base;
+  ctx.fillRect(0, 0, 2048, 2048);
+
+  for (let i = 0; i < 260; i++) {
+    const x = random() * 2048, y = random() * 2048, r = 30 + random() * 180;
+    const colors = ['rgba(223,213,129,0.16)', 'rgba(83,127,68,0.14)', 'rgba(175,193,103,0.18)', 'rgba(72,112,71,0.1)'];
+    const blob = ctx.createRadialGradient(x, y, 0, x, y, r);
+    blob.addColorStop(0, colors[Math.floor(random() * colors.length)]);
+    blob.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = blob;
+    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+
+  ctx.save();
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const river = new Path2D();
+  river.moveTo(1510, 140);
+  river.bezierCurveTo(1330, 430, 1470, 700, 1190, 920);
+  river.bezierCurveTo(1000, 1080, 1080, 1350, 820, 1800);
+  ctx.strokeStyle = 'rgba(175,150,91,0.62)'; ctx.lineWidth = 118; ctx.stroke(river);
+  ctx.strokeStyle = '#416f6b'; ctx.lineWidth = 90; ctx.stroke(river);
+  ctx.strokeStyle = 'rgba(103,153,148,0.74)'; ctx.lineWidth = 44; ctx.stroke(river);
+  ctx.strokeStyle = 'rgba(202,225,198,0.48)'; ctx.lineWidth = 6; ctx.stroke(river);
+  ctx.restore();
+
+  for (let ring = 0; ring < 9; ring++) {
+    ctx.save();
+    ctx.globalAlpha = 0.1; ctx.strokeStyle = '#4b6f52'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(1024 + (random() - 0.5) * 80, 1024 + (random() - 0.5) * 80, 390 + ring * 52, 270 + ring * 40, -0.32, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  for (let cluster = 0; cluster < 18; cluster++) {
+    const cx = 210 + random() * 1620, cy = 210 + random() * 1620;
+    if (Math.hypot(cx - 1024, cy - 1024) < 330) continue;
+    for (let i = 0; i < 14; i++) {
+      const x = cx + (random() - 0.5) * 150, y = cy + (random() - 0.5) * 110, r = 4 + random() * 13;
+      ctx.fillStyle = random() > 0.5 ? 'rgba(28,58,38,0.62)' : 'rgba(50,86,44,0.58)';
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+      if (i % 4 === 0) { ctx.fillStyle = 'rgba(52,74,55,0.42)'; ctx.fillRect(x - 1, y, 2, 11); }
+    }
+  }
+
+  ctx.save();
+  ctx.strokeStyle = 'rgba(208,187,115,0.48)'; ctx.lineWidth = 13; ctx.setLineDash([3, 25]);
+  ctx.beginPath(); ctx.arc(1024, 1040, 690, 0.15, Math.PI * 1.85); ctx.stroke();
+  ctx.restore();
+
+  for (let i = 0; i < 3400; i++) {
+    ctx.fillStyle = random() > 0.5 ? 'rgba(255,248,190,0.055)' : 'rgba(43,67,48,0.055)';
+    ctx.fillRect(random() * 2048, random() * 2048, 1 + random() * 2, 1 + random() * 2);
+  }
+
+  ctx.beginPath(); ctx.arc(1024, 1024, 955, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(118,91,48,0.55)'; ctx.lineWidth = 10; ctx.stroke();
+  ctx.beginPath(); ctx.arc(1024, 1024, 978, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(244,221,153,0.45)'; ctx.lineWidth = 3; ctx.stroke();
+
+  const vignette = ctx.createRadialGradient(1024, 1024, 690, 1024, 1024, 1035);
+  vignette.addColorStop(0, 'rgba(42,59,39,0)');
+  vignette.addColorStop(0.82, 'rgba(42,59,39,0.03)');
+  vignette.addColorStop(1, 'rgba(42,59,39,0.27)');
+  ctx.fillStyle = vignette;
+  ctx.fillRect(0, 0, 2048, 2048);
+  ctx.restore();
+  return makeTexture(c);
+}
+
+function createAuraTexture() {
+  const s = 512;
+  const { canvas: c, ctx } = makeCanvas(s, s);
+  const cx = s / 2, cy = s / 2;
+  ctx.clearRect(0, 0, s, s);
+  ctx.strokeStyle = 'rgba(94,195,188,0.85)';
+  ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(cx, cy, 216, 0, Math.PI * 2); ctx.stroke();
+  ctx.strokeStyle = 'rgba(94,195,188,0.4)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 14]);
+  ctx.beginPath(); ctx.arc(cx, cy, 196, 0, Math.PI * 2); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.strokeStyle = 'rgba(228,185,95,0.8)';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.arc(cx, cy, 178, 0, Math.PI * 2); ctx.stroke();
+  for (let i = 0; i < 24; i++) {
+    const a = (i / 24) * Math.PI * 2;
+    const r1 = i % 3 === 0 ? 150 : 160;
+    const r2 = 172;
+    ctx.strokeStyle = i % 3 === 0 ? 'rgba(228,185,95,0.85)' : 'rgba(94,195,188,0.6)';
+    ctx.lineWidth = i % 3 === 0 ? 4 : 2;
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
+    ctx.lineTo(cx + Math.cos(a) * r2, cy + Math.sin(a) * r2);
+    ctx.stroke();
+  }
+  const g = ctx.createRadialGradient(cx, cy, 40, cx, cy, 150);
+  g.addColorStop(0, 'rgba(94,195,188,0.16)');
+  g.addColorStop(0.7, 'rgba(94,195,188,0.05)');
+  g.addColorStop(1, 'rgba(94,195,188,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(cx, cy, 150, 0, Math.PI * 2); ctx.fill();
+  return makeTexture(c);
+}
+
+function createAuraGoldTexture() {
+  const s = 512;
+  const { canvas: c, ctx } = makeCanvas(s, s);
+  const cx = s / 2, cy = s / 2;
+  ctx.clearRect(0, 0, s, s);
+  ctx.strokeStyle = 'rgba(228,185,95,0.9)';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.arc(cx, cy, 238, 0, Math.PI * 2); ctx.stroke();
+  ctx.strokeStyle = 'rgba(228,185,95,0.45)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(cx, cy, 222, 0, Math.PI * 2); ctx.stroke();
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2 - Math.PI / 2;
+    const x1 = cx + Math.cos(a) * 196, y1 = cy + Math.sin(a) * 196;
+    const x2 = cx + Math.cos(a) * 236, y2 = cy + Math.sin(a) * 236;
+    ctx.strokeStyle = 'rgba(228,185,95,0.75)';
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.save();
+    ctx.translate(cx + Math.cos(a) * 168, cy + Math.sin(a) * 168);
+    ctx.rotate(a);
+    ctx.strokeStyle = 'rgba(94,195,188,0.6)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-7, -7); ctx.lineTo(7, 7);
+    ctx.moveTo(7, -7); ctx.lineTo(-7, 7);
+    ctx.stroke();
+    ctx.restore();
+  }
+  ctx.strokeStyle = 'rgba(94,195,188,0.35)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([10, 16]);
+  ctx.beginPath(); ctx.arc(cx, cy, 150, 0, Math.PI * 2); ctx.stroke();
+  ctx.setLineDash([]);
+  return makeTexture(c);
+}
+
+function createSparkTexture() {
+  const s = 64;
+  const { canvas: c, ctx } = makeCanvas(s, s);
+  const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 30);
+  g.addColorStop(0, 'rgba(255,255,240,1)');
+  g.addColorStop(0.25, 'rgba(255,236,170,0.9)');
+  g.addColorStop(0.6, 'rgba(150,230,220,0.35)');
+  g.addColorStop(1, 'rgba(120,220,210,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, s, s);
+  return makeTexture(c);
+}
+
+const TEX = {
+  plasterWarm: createPlasterTexture(7711, ['#b99763', '#98794d', '#725636'], 24),
+  plasterRaven: createPlasterTexture(7712, ['#8c9585', '#6f7b6c', '#526052'], 30),
+  plasterNavy: createPlasterTexture(7713, ['#47626c', '#314c57', '#1e333c'], 10),
+  sky: createSkyTexture(),
+  board: createBoardTexture(),
+  aura: createAuraTexture(),
+  auraGold: createAuraGoldTexture(),
+  spark: createSparkTexture(),
+};
+TEX.plasterWarm.wrapS = TEX.plasterWarm.wrapT = THREE.RepeatWrapping;
+TEX.plasterRaven.wrapS = TEX.plasterRaven.wrapT = THREE.RepeatWrapping;
+
+/* ══════════════════ 场景 / 相机 / 光照 ══════════════════ */
+
+const stage = document.getElementById('stage');
+const scene = new THREE.Scene();
+scene.background = TEX.sky;
+scene.fog = new THREE.Fog(0x7f9f98, 1700, 3400);
+
+const camera = new THREE.PerspectiveCamera(33, innerWidth / innerHeight, 1, 6000);
+const BASE = { yaw: -0.34, pitch: 37, dist: 1540, target: new THREE.Vector3(0, -22, 0) };
+const cam = { yaw: BASE.yaw, pitch: BASE.pitch, dist: BASE.dist, tYaw: BASE.yaw, tPitch: BASE.pitch, tDist: BASE.dist };
+
+function applyCamera() {
+  const p = THREE.MathUtils.degToRad(cam.pitch);
+  const h = Math.cos(p) * cam.dist;
+  camera.position.set(Math.sin(cam.yaw) * h, Math.sin(p) * cam.dist, Math.cos(cam.yaw) * h);
+  camera.lookAt(BASE.target);
+}
+applyCamera();
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.86;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+stage.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0x86aaa9, 0x172016, 0.42));
+
+const sun = new THREE.DirectionalLight(0xffc27c, 4.0);
+sun.position.set(-520, 900, 620);
+sun.castShadow = true;
+sun.shadow.mapSize.set(1024, 1024);
+sun.shadow.camera.near = 200;
+sun.shadow.camera.far = 2600;
+sun.shadow.camera.left = -700;
+sun.shadow.camera.right = 700;
+sun.shadow.camera.top = 700;
+sun.shadow.camera.bottom = -700;
+sun.shadow.bias = -0.0006;
+scene.add(sun);
+
+const fill = new THREE.DirectionalLight(0x79b4ca, 0.62);
+fill.position.set(600, 320, -520);
+scene.add(fill);
+
+const rim = new THREE.DirectionalLight(0x9ed6d5, 0.9);
+rim.position.set(120, 240, -780);
+scene.add(rim);
+
+const runeLight = new THREE.PointLight(0x5ec3bc, 3.4, 900, 2);
+runeLight.position.set(0, 160, -40);
+scene.add(runeLight);
+
+/* 落日辉光 */
+(function sunGlow() {
+  const { canvas: c, ctx } = makeCanvas(256, 256);
+  const g = ctx.createRadialGradient(128, 128, 0, 128, 128, 126);
+  g.addColorStop(0, 'rgba(255,238,190,0.85)');
+  g.addColorStop(0.35, 'rgba(255,206,130,0.32)');
+  g.addColorStop(1, 'rgba(255,190,110,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, 256, 256);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: makeTexture(c), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+  sp.position.set(-1150, 620, 1050);
+  sp.scale.set(1500, 1500, 1);
+  scene.add(sp);
+})();
+
+/* 远景云 */
+(function clouds() {
+  const { canvas: c, ctx } = makeCanvas(512, 256);
+  ctx.filter = 'blur(16px)';
+  ctx.fillStyle = 'rgba(226,236,222,0.9)';
+  const rnd = mulberry32(4411);
+  for (let i = 0; i < 22; i++) {
+    const x = 90 + rnd() * 330, y = 110 + rnd() * 70;
+    ctx.beginPath();
+    ctx.ellipse(x, y, 44 + rnd() * 76, 16 + rnd() * 26, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const tex = makeTexture(c);
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2 + 0.4;
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.22 + Math.random() * 0.2, depthWrite: false, fog: false }));
+    sp.position.set(Math.cos(a) * 1750, 120 + Math.random() * 260, Math.sin(a) * 1750);
+    const sc = 900 + Math.random() * 700;
+    sp.scale.set(sc, sc * 0.34, 1);
+    scene.add(sp);
+  }
+})();
+
+/* ══════════════════ 棋盘 ══════════════════ */
+
+const BOARD_R = 430;
+const RING_R = 322;
+const TILE_N = 16;
+
+const board = new THREE.Group();
+scene.add(board);
+
+const boardTop = new THREE.Mesh(
+  new THREE.CircleGeometry(BOARD_R, 96),
+  new THREE.MeshStandardMaterial({ map: TEX.board, roughness: 0.94, metalness: 0 })
+);
+boardTop.rotation.x = -Math.PI / 2;
+boardTop.receiveShadow = true;
+board.add(boardTop);
+
+const boardRim = new THREE.Mesh(
+  new THREE.CylinderGeometry(BOARD_R, BOARD_R + 12, 46, 96, 1, true),
+  new THREE.MeshStandardMaterial({ map: TEX.plasterWarm, color: 0x9b8863, roughness: 0.96, side: THREE.DoubleSide })
+);
+boardRim.position.y = -23;
+boardRim.castShadow = true;
+board.add(boardRim);
+
+const boardUnder = new THREE.Mesh(
+  new THREE.ConeGeometry(BOARD_R * 0.98, 260, 96, 1, true),
+  new THREE.MeshStandardMaterial({ color: 0x4a4433, roughness: 1, side: THREE.DoubleSide, flatShading: true })
+);
+boardUnder.position.y = -170;
+boardUnder.rotation.x = Math.PI;
+board.add(boardUnder);
+
+const boardEdge = new THREE.Mesh(
+  new THREE.TorusGeometry(BOARD_R - 4, 7, 6, 96),
+  new THREE.MeshStandardMaterial({ color: 0xc3943d, roughness: 0.55, metalness: 0.45, emissive: 0x5a3f10, emissiveIntensity: 0.4 })
+);
+boardEdge.rotation.x = Math.PI / 2;
+boardEdge.position.y = 2;
+board.add(boardEdge);
+
+const tileGeo = new THREE.CylinderGeometry(80, 86, 16, 8);
+const tileMats = [
+  new THREE.MeshStandardMaterial({ map: TEX.plasterWarm, color: 0xd9c9a3, roughness: 0.94 }),
+  new THREE.MeshStandardMaterial({ map: TEX.plasterWarm, color: 0xc9bd97, roughness: 0.95 }),
+  new THREE.MeshStandardMaterial({ map: TEX.plasterRaven, color: 0xd8dcc9, roughness: 0.93 }),
+];
+
+const tiles = [];
+for (let i = 0; i < TILE_N; i++) {
+  const a = -Math.PI / 2 + (i / TILE_N) * Math.PI * 2;
+  const t = new THREE.Mesh(tileGeo, tileMats[i % 3]);
+  t.rotation.y = Math.PI / 8 + a;
+  t.position.set(Math.cos(a) * RING_R, 14, Math.sin(a) * RING_R);
+  t.castShadow = true;
+  t.receiveShadow = true;
+  t.userData = { kind: 'tower', index: i, name: `第 ${i + 1} 格` };
+  board.add(t);
+  tiles.push(t);
+
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(60, 68, 32),
+    new THREE.MeshBasicMaterial({ color: 0xc3943d, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false })
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.set(Math.cos(a) * RING_R, 22.5, Math.sin(a) * RING_R);
+  board.add(ring);
+}
+
+function towerStack(layers, x, z, raven) {
+  const g = new THREE.Group();
+  for (let i = 0; i < layers; i++) {
+    const r = 62 - i * 1.4;
+    const mat = raven
+      ? new THREE.MeshStandardMaterial({ map: TEX.plasterRaven, color: 0xe8e6d8, roughness: 0.94 })
+      : new THREE.MeshStandardMaterial({ map: TEX.plasterWarm, color: 0xffffff, roughness: 0.95 });
+    const seg = new THREE.Mesh(new THREE.CylinderGeometry(r, r + 4, 44, 8), mat);
+    seg.rotation.y = Math.PI / 8;
+    seg.position.y = 24 + i * 45;
+    seg.castShadow = true;
+    seg.receiveShadow = true;
+    g.add(seg);
+
+    if (i === layers - 1) {
+      for (let k = 0; k < 8; k++) {
+        const a = Math.PI / 8 + (k / 8) * Math.PI * 2;
+        const merlon = new THREE.Mesh(new THREE.BoxGeometry(16, 14, 11), mat);
+        merlon.position.set(Math.cos(a) * (r - 1), 24 + i * 45 + 29, Math.sin(a) * (r - 1));
+        merlon.rotation.y = -a;
+        merlon.castShadow = true;
+        g.add(merlon);
+      }
+    }
+  }
+  g.position.set(x, 0, z);
+  g.userData = { kind: 'tower', name: raven ? '渡鸦纹章塔' : '石塔', layers };
+  return g;
+}
+
+const towers = [];
+[[2, -RING_R * 0.82, -RING_R * 0.32, true], [3, -RING_R * 0.1, -RING_R * 0.9, false],
+ [1, RING_R * 0.72, -RING_R * 0.55, false], [4, RING_R * 0.28, RING_R * 0.86, true]].forEach(([n, x, z, raven]) => {
+  const tw = towerStack(n, x, z, raven);
+  board.add(tw);
+  towers.push(tw);
+});
+
+function buildCastle(x, z) {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(
+    new THREE.CylinderGeometry(54, 60, 100, 8),
+    new THREE.MeshStandardMaterial({ map: TEX.plasterNavy, color: 0xaebfbe, roughness: 0.92, metalness: 0.03 })
+  );
+  body.rotation.y = Math.PI / 8;
+  body.position.y = 50;
+  body.castShadow = true;
+  g.add(body);
+
+  const roof = new THREE.Mesh(
+    new THREE.ConeGeometry(66, 78, 8),
+    new THREE.MeshStandardMaterial({ color: 0x7d3a34, roughness: 0.86 })
+  );
+  roof.position.y = 138;
+  roof.castShadow = true;
+  g.add(roof);
+
+  const spire = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.6, 52, 6),
+    new THREE.MeshStandardMaterial({ color: 0x6b5a3c, metalness: 0.3, roughness: 0.6 }));
+  spire.position.y = 196;
+  g.add(spire);
+
+  const flag = new THREE.Mesh(new THREE.PlaneGeometry(38, 22),
+    new THREE.MeshStandardMaterial({ color: 0x2d7f88, side: THREE.DoubleSide, emissive: 0x0d3a3d, emissiveIntensity: 0.3 }));
+  flag.position.set(19, 208, 0);
+  g.add(flag);
+
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + 0.4;
+    const win = new THREE.Mesh(
+      new THREE.PlaneGeometry(9, 15),
+      new THREE.MeshBasicMaterial({ color: 0xf3c96a, transparent: true, opacity: 0.9 })
+    );
+    win.position.set(Math.cos(a) * 56, 62, Math.sin(a) * 56);
+    win.rotation.y = -a + Math.PI / 2;
+    g.add(win);
+  }
+  g.position.set(x, 0, z);
+  g.userData = { kind: 'castle', name: '鸦堡 Ravenskeep' };
+  return g;
+}
+const castle = buildCastle(RING_R * 0.95, -RING_R * 0.1);
+board.add(castle);
+
+const WIZ_COLORS = [0xad4f39, 0x2d7f88, 0x6b7f9a, 0x9a5b8a];
+function buildWizard(x, z, color, y = 22) {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.ConeGeometry(14, 38, 12),
+    new THREE.MeshStandardMaterial({ color, roughness: 0.82 }));
+  body.position.y = y + 19;
+  body.castShadow = true;
+  g.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(7.4, 14, 12),
+    new THREE.MeshStandardMaterial({ color: 0xf1d8ae, roughness: 0.8 }));
+  head.position.y = y + 41;
+  head.castShadow = true;
+  g.add(head);
+  const hat = new THREE.Mesh(new THREE.ConeGeometry(9.6, 24, 12),
+    new THREE.MeshStandardMaterial({ color, roughness: 0.8 }));
+  hat.position.y = y + 56;
+  hat.castShadow = true;
+  g.add(hat);
+  g.userData = { kind: 'wizard', name: '巫师 · 赤袍学徒', meta: '塔顶 · 可移动 1 格' };
+  return g;
+}
+const wizards = [];
+[[-RING_R * 0.82, -RING_R * 0.32, 0], [RING_R * 0.72, -RING_R * 0.55, 1],
+ [RING_R * 0.28, RING_R * 0.86, 2]].forEach(([x, z, ci], i) => {
+  const w = buildWizard(x + (i % 2 ? 46 : -46), z + 30, WIZ_COLORS[ci]);
+  w.position.set(x + (i % 2 ? 46 : -46), 0, z + 30);
+  board.add(w);
+  wizards.push(w);
+});
+
+function buildTree(x, z, s = 1) {
+  const g = new THREE.Group();
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(5 * s, 8 * s, 40 * s, 6),
+    new THREE.MeshStandardMaterial({ color: 0x5b4a35, roughness: 1 }));
+  trunk.position.y = 20 * s;
+  g.add(trunk);
+  for (let i = 0; i < 3; i++) {
+    const cone = new THREE.Mesh(new THREE.ConeGeometry((34 - i * 8) * s, 54 * s, 7),
+      new THREE.MeshStandardMaterial({ color: i % 2 ? 0x33502f : 0x27412a, roughness: 1 }));
+    cone.position.y = (56 + i * 34) * s;
+    cone.castShadow = true;
+    g.add(cone);
+  }
+  g.position.set(x, 0, z);
+  return g;
+}
+[[-250, 140, 1.1], [300, 190, 0.9], [-40, 250, 0.8]].forEach(([x, z, s]) => board.add(buildTree(x, z, s)));
+
+const contact = new THREE.Mesh(
+  new THREE.CircleGeometry(BOARD_R * 1.5, 64),
+  new THREE.MeshBasicMaterial({ map: (() => {
+    const { canvas: c, ctx } = makeCanvas(256, 256);
+    const g = ctx.createRadialGradient(128, 128, 0, 128, 128, 124);
+    g.addColorStop(0, 'rgba(0,0,0,0.5)');
+    g.addColorStop(0.5, 'rgba(0,0,0,0.22)');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, 256, 256);
+    return makeTexture(c);
+  })(), transparent: true, depthWrite: false, opacity: 0.55 })
+);
+contact.rotation.x = -Math.PI / 2;
+contact.position.y = -300;
+scene.add(contact);
+
+/* ══════════════════ 粒子 ══════════════════ */
+
+const P_MAX = 900;
+const pGeo = new THREE.BufferGeometry();
+const pPos = new Float32Array(P_MAX * 3);
+const pCol = new Float32Array(P_MAX * 3);
+const pSize = new Float32Array(P_MAX);
+const pAlpha = new Float32Array(P_MAX);
+pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+pGeo.setAttribute('aColor', new THREE.BufferAttribute(pCol, 3));
+pGeo.setAttribute('aSize', new THREE.BufferAttribute(pSize, 1));
+pGeo.setAttribute('aAlpha', new THREE.BufferAttribute(pAlpha, 1));
+
+const pVel = new Float32Array(P_MAX * 3);
+const pLife = new Float32Array(P_MAX);
+const pMax = new Float32Array(P_MAX);
+let pCursor = 0;
+
+const pMat = new THREE.ShaderMaterial({
+  uniforms: { uMap: { value: TEX.spark } },
+  vertexShader: `
+    attribute vec3 aColor; attribute float aSize; attribute float aAlpha;
+    varying vec3 vColor; varying float vAlpha;
+    void main() {
+      vColor = aColor; vAlpha = aAlpha;
+      vec4 mv = modelViewMatrix * vec4(position, 1.0);
+      gl_PointSize = aSize * (420.0 / -mv.z);
+      gl_Position = projectionMatrix * mv;
+    }`,
+  fragmentShader: `
+    uniform sampler2D uMap; varying vec3 vColor; varying float vAlpha;
+    void main() {
+      vec4 t = texture2D(uMap, gl_PointCoord);
+      gl_FragColor = vec4(vColor, 1.0) * t * vAlpha;
+    }`,
+  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+});
+const particles = new THREE.Points(pGeo, pMat);
+particles.frustumCulled = false;
+scene.add(particles);
+
+function spawn(x, y, z, vx, vy, vz, life, size, color) {
+  const i = pCursor;
+  pCursor = (pCursor + 1) % P_MAX;
+  pPos[i * 3] = x; pPos[i * 3 + 1] = y; pPos[i * 3 + 2] = z;
+  pVel[i * 3] = vx; pVel[i * 3 + 1] = vy; pVel[i * 3 + 2] = vz;
+  pLife[i] = life; pMax[i] = life; pSize[i] = size;
+  const c = new THREE.Color(color);
+  pCol[i * 3] = c.r; pCol[i * 3 + 1] = c.g; pCol[i * 3 + 2] = c.b;
+  pAlpha[i] = 1;
+}
+
+function burst(pos, n, color, speed, size = 7) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const up = 0.3 + Math.random() * 0.9;
+    const sp = speed * (0.4 + Math.random() * 0.8);
+    spawn(pos.x, pos.y, pos.z,
+      Math.cos(a) * sp, up * sp, Math.sin(a) * sp,
+      0.7 + Math.random() * 0.6, size * (0.6 + Math.random()), color);
+  }
+}
+
+function updateParticles(dt) {
+  for (let i = 0; i < P_MAX; i++) {
+    if (pLife[i] <= 0) { pAlpha[i] = 0; continue; }
+    pLife[i] -= dt;
+    const k = Math.max(0, pLife[i] / pMax[i]);
+    pAlpha[i] = k * k;
+    pPos[i * 3] += pVel[i * 3] * dt;
+    pPos[i * 3 + 1] += pVel[i * 3 + 1] * dt;
+    pPos[i * 3 + 2] += pVel[i * 3 + 2] * dt;
+    pVel[i * 3 + 1] -= 26 * dt;
+    pVel[i * 3] *= 1 - 1.4 * dt;
+    pVel[i * 3 + 2] *= 1 - 1.4 * dt;
+  }
+  pGeo.attributes.position.needsUpdate = true;
+  pGeo.attributes.aColor.needsUpdate = true;
+  pGeo.attributes.aSize.needsUpdate = true;
+  pGeo.attributes.aAlpha.needsUpdate = true;
+}
+
+const motesGeo = new THREE.BufferGeometry();
+const MOTE_N = 220;
+const mPos = new Float32Array(MOTE_N * 3);
+for (let i = 0; i < MOTE_N; i++) {
+  const a = Math.random() * Math.PI * 2;
+  const r = 80 + Math.random() * 620;
+  mPos[i * 3] = Math.cos(a) * r;
+  mPos[i * 3 + 1] = -40 + Math.random() * 520;
+  mPos[i * 3 + 2] = Math.sin(a) * r;
+}
+motesGeo.setAttribute('position', new THREE.BufferAttribute(mPos, 3));
+const motes = new THREE.Points(motesGeo, new THREE.PointsMaterial({
+  map: TEX.spark, color: 0xffe9b0, size: 9, transparent: true, opacity: 0.5,
+  blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true, fog: false,
+}));
+scene.add(motes);
+
+/* ══════════════════ 卡面 ══════════════════ */
+
+const W = 512, H = 760;
+function roundRect(g, x, y, w, h, r) {
+  g.beginPath();
+  g.moveTo(x + r, y);
+  g.arcTo(x + w, y, x + w, y + h, r);
+  g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r);
+  g.arcTo(x, y, x + w, y, r);
+  g.closePath();
+}
+
+function cardTexture(opts) {
+  const { kind, step, title, sub } = opts;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  const grd = g.createLinearGradient(0, 0, W, H);
+  grd.addColorStop(0, '#fdf6e2');
+  grd.addColorStop(0.5, '#f3e6c8');
+  grd.addColorStop(1, '#e2cda4');
+  roundRect(g, 0, 0, W, H, 34);
+  g.fillStyle = grd; g.fill();
+  for (let i = 0; i < 2200; i++) {
+    g.fillStyle = `rgba(120,95,55,${Math.random() * 0.055})`;
+    g.fillRect(Math.random() * W, Math.random() * H, 1.5, 1.5);
+  }
+  const vg = g.createRadialGradient(W / 2, H / 2, H * 0.32, W / 2, H / 2, H * 0.8);
+  vg.addColorStop(0, 'rgba(120,95,50,0)');
+  vg.addColorStop(1, 'rgba(110,85,45,.16)');
+  g.fillStyle = vg; roundRect(g, 0, 0, W, H, 34); g.fill();
+
+  if (kind !== 'spell') {
+    g.fillStyle = 'rgba(190,163,112,.34)';
+    roundRect(g, 26, 26, 60, H - 52, 10); g.fill();
+    g.strokeStyle = 'rgba(150,119,68,.5)'; g.lineWidth = 1.4;
+    g.beginPath(); g.moveTo(86, 30); g.lineTo(86, H - 30); g.stroke();
+  }
+
+  if (step) {
+    g.fillStyle = '#a87f3c';
+    g.beginPath(); g.arc(W - 96, 98, 42, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = 'rgba(255,250,235,.9)'; g.lineWidth = 2;
+    g.beginPath(); g.arc(W - 96, 98, 34, 0, Math.PI * 2); g.stroke();
+    g.fillStyle = '#fffaea';
+    g.font = '600 44px Georgia,"Songti SC",serif';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(String(step), W - 96, 102);
+  }
+
+  if (kind === 'spell') {
+    const cx = W / 2, cy = 300, r = 118;
+    const rg = g.createRadialGradient(cx - r * 0.3, cy - r * 0.34, r * 0.1, cx, cy, r);
+    rg.addColorStop(0, '#dff0e2'); rg.addColorStop(0.6, '#a9c6b4'); rg.addColorStop(1, '#5f8377');
+    g.fillStyle = '#8b7a55';
+    g.beginPath(); g.arc(cx, cy, r + 6, 0, Math.PI * 2); g.fill();
+    g.fillStyle = rg;
+    g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = '#e6d49a'; g.lineWidth = 2.6;
+    g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke();
+    g.strokeStyle = 'rgba(45,127,136,.6)'; g.lineWidth = 1.8; g.setLineDash([5, 7]);
+    g.beginPath(); g.arc(cx, cy, r * 0.78, 0, Math.PI * 2); g.stroke();
+    g.setLineDash([]);
+    g.strokeStyle = '#2f5f4c'; g.lineWidth = 5.5; g.lineCap = 'round';
+    g.beginPath();
+    g.moveTo(cx, cy - r * 0.5); g.lineTo(cx, cy + r * 0.5);
+    g.moveTo(cx - r * 0.46, cy - r * 0.2); g.lineTo(cx + r * 0.46, cy + r * 0.3);
+    g.moveTo(cx + r * 0.46, cy - r * 0.2); g.lineTo(cx - r * 0.46, cy + r * 0.3);
+    g.stroke();
+  } else {
+    const drawTower = (cx, cy, s) => {
+      g.save(); g.translate(cx, cy);
+      g.fillStyle = 'rgba(110,90,55,.15)';
+      g.beginPath(); g.ellipse(0, s * 0.72, s * 0.72, s * 0.15, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#d9c9a3'; g.strokeStyle = '#8b774e'; g.lineWidth = 3;
+      g.beginPath();
+      g.moveTo(-s * 0.6, s * 0.62); g.lineTo(-s * 0.5, -s * 0.5);
+      g.lineTo(s * 0.5, -s * 0.5); g.lineTo(s * 0.6, s * 0.62);
+      g.closePath(); g.fill(); g.stroke();
+      g.fillStyle = '#c9b892';
+      for (let i = 0; i < 4; i++) g.fillRect(-s * 0.5 + i * s * 0.28, -s * 0.66, s * 0.17, s * 0.18);
+      g.fillStyle = '#6f5c37';
+      g.beginPath(); g.arc(0, s * 0.3, s * 0.13, Math.PI, 0); g.fill();
+      g.restore();
+    };
+    const drawWizard = (cx, cy, s) => {
+      g.save(); g.translate(cx, cy);
+      g.fillStyle = '#ad4f39';
+      g.beginPath(); g.moveTo(0, -s * 0.7); g.lineTo(s * 0.29, s * 0.02); g.lineTo(-s * 0.29, s * 0.02); g.closePath(); g.fill();
+      g.fillStyle = '#f7e5bf';
+      g.beginPath(); g.moveTo(-s * 0.52, s * 0.05); g.quadraticCurveTo(0, -s * 0.12, s * 0.52, s * 0.05);
+      g.quadraticCurveTo(0, s * 0.21, -s * 0.52, s * 0.05); g.fill();
+      g.fillStyle = '#ad4f39';
+      g.beginPath(); g.moveTo(-s * 0.34, s * 0.13); g.lineTo(s * 0.34, s * 0.13);
+      g.lineTo(s * 0.42, s * 0.74); g.lineTo(-s * 0.42, s * 0.74); g.closePath(); g.fill();
+      g.fillStyle = '#3a2922';
+      g.beginPath(); g.arc(0, s * 0.4, s * 0.1, 0, Math.PI * 2); g.fill();
+      g.restore();
+    };
+    if (kind === 'tower') drawTower(W / 2, 306, 152);
+    else if (kind === 'wizard') drawWizard(W / 2, 320, 172);
+    else { drawTower(W / 2 - 76, 312, 120); drawWizard(W / 2 + 80, 324, 134); }
+  }
+
+  g.textAlign = 'center';
+  g.fillStyle = '#3b2d1c';
+  g.font = '600 46px Georgia,"Songti SC",serif';
+  g.fillText(title, W / 2, 598);
+
+  g.fillStyle = 'rgba(59,45,28,.72)';
+  g.font = '28px "PingFang SC",system-ui,sans-serif';
+  g.fillText(sub, W / 2, 646);
+
+  g.strokeStyle = 'rgba(164,136,86,.5)'; g.lineWidth = 1.2;
+  g.beginPath(); g.moveTo(W / 2 - 76, 674); g.lineTo(W / 2 + 76, 674); g.stroke();
+
+  g.fillStyle = 'rgba(59,45,28,.38)';
+  g.font = '21px Georgia,serif';
+  g.fillText(kind === 'spell' ? 'RUNE' : 'CODEX', W / 2, 708);
+
+  g.strokeStyle = 'rgba(150,112,52,.95)'; g.lineWidth = 3.6;
+  roundRect(g, 15, 15, W - 30, H - 30, 26); g.stroke();
+  g.strokeStyle = 'rgba(177,142,76,.32)'; g.lineWidth = 1;
+  roundRect(g, 26, 26, W - 52, H - 52, 19); g.stroke();
+
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
+
+const CARD_W = 150, CARD_H = 225;
+const cardGeo = new THREE.PlaneGeometry(CARD_W, CARD_H);
+
+function makeCard(opts) {
+  const g = new THREE.Group();
+  const face = new THREE.Mesh(cardGeo, new THREE.MeshBasicMaterial({
+    map: cardTexture(opts), transparent: true, opacity: 1, depthWrite: false, side: THREE.DoubleSide,
+  }));
+  face.renderOrder = 12;
+  g.add(face);
+
+  const aura = new THREE.Mesh(
+    new THREE.PlaneGeometry(CARD_W * 1.55, CARD_H * 1.42),
+    new THREE.MeshBasicMaterial({ map: TEX.aura, transparent: true, opacity: 0, depthWrite: false,
+      blending: THREE.AdditiveBlending, side: THREE.DoubleSide })
+  );
+  aura.position.z = -4;
+  aura.renderOrder = 11;
+  g.add(aura);
+
+  const auraGold = new THREE.Mesh(
+    new THREE.PlaneGeometry(CARD_W * 1.86, CARD_H * 1.66),
+    new THREE.MeshBasicMaterial({ map: TEX.auraGold, transparent: true, opacity: 0, depthWrite: false,
+      blending: THREE.AdditiveBlending, side: THREE.DoubleSide })
+  );
+  auraGold.position.z = -6;
+  auraGold.renderOrder = 10;
+  g.add(auraGold);
+
+  g.userData = {
+    kind: 'card', cardKind: opts.kind, label: opts.title,
+    face, aura, auraGold,
+    slot: { nx: 0, ny: 0, dist: 1200, s: 1, op: 1, tilt: 0.18, fan: 0, roll: 0 },
+    hover: 0, glow: 0, goldBoost: 0,
+  };
+  scene.add(g);
+  return g;
+}
+
+const handCards = [
+  { kind: 'tower', step: 4, title: '塔 · 4', sub: '移动一座塔 4 格' },
+  { kind: 'wizard', step: 2, title: '巫师 · 2', sub: '移动一名巫师 2 格' },
+  { kind: 'both', step: 1, title: '巫师 / 塔 1', sub: '二选一 · 移动 1 格' },
+].map(makeCard);
+
+const spellCards = [
+  { kind: 'spell', title: '移动巫师', sub: '消耗 1 · 顺时针 1 格' },
+  { kind: 'spell', title: '移动塔', sub: '消耗 1 · 推进 2 格' },
+  { kind: 'spell', title: '解封巫师', sub: '消耗 1 · 塔下营救' },
+  { kind: 'spell', title: '移动城堡', sub: '消耗 1 · 鸦堡迁移' },
+].map(makeCard);
+
+function S(nx, ny, dist, extra) {
+  return Object.assign({ nx, ny, dist, s: 1, op: 1, tilt: 0.18, fan: 0, roll: 0 }, extra);
+}
+const HAND = [S(-0.57, -0.60, 1230, { s: 0.9, fan: 0.10 }), S(0, -0.49, 1170, { s: 0.9 }), S(0.57, -0.60, 1230, { s: 0.9, fan: -0.10 })];
+const HAND_OUT = [
+  S(-0.52, -0.88, 1260, { s: 0.9, op: 0.2, fan: 0.14 }),
+  S(0, -0.94, 1280, { s: 0.88, op: 0.14 }),
+  S(0.52, -0.88, 1260, { s: 0.9, op: 0.2, fan: -0.14 }),
+];
+const SELECTED = S(0, -0.12, 950, { s: 1.1, tilt: 0.10 });
+const SPELL_REST = [
+  S(-0.80, 0.10, 1500, { s: 0.62, tilt: 0.30, fan: 0.50, roll: 0.06 }),
+  S(-0.795, 0.115, 1498, { s: 0.62, tilt: 0.30, fan: 0.48, roll: 0.03 }),
+  S(-0.79, 0.13, 1496, { s: 0.62, tilt: 0.30, fan: 0.46, roll: 0 }),
+  S(-0.785, 0.145, 1494, { s: 0.62, tilt: 0.30, fan: 0.44, roll: -0.03 }),
+];
+const DECK_STACK = [
+  S(-0.80, 0.10, 1500, { s: 0.62, tilt: 0.30, fan: 0.50, roll: 0.05, op: 0.28 }),
+  S(-0.79, 0.12, 1498, { s: 0.62, tilt: 0.30, fan: 0.48, roll: 0.02, op: 0.22 }),
+  S(-0.78, 0.14, 1496, { s: 0.62, tilt: 0.30, fan: 0.46, roll: -0.02, op: 0.16 }),
+];
+const SPELL_FAN = [
+  S(-0.62, -0.50, 1250, { s: 0.84, tilt: 0.18, fan: 0.10 }),
+  S(-0.20, -0.42, 1200, { s: 0.84, tilt: 0.18, fan: 0.03 }),
+  S(0.20, -0.42, 1200, { s: 0.84, tilt: 0.18, fan: -0.03 }),
+  S(0.62, -0.50, 1250, { s: 0.84, tilt: 0.18, fan: -0.10 }),
+];
+
+handCards.forEach((c, i) => Object.assign(c.userData.slot, HAND[i]));
+spellCards.forEach((c, i) => Object.assign(c.userData.slot, SPELL_REST[i]));
+
+/* ══════════════════ 补间 ══════════════════ */
+
+const tweens = [];
+const easeOutCubic = t => 1 - Math.pow(1 - t, 3);
+const easeInOutCubic = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+function slotTo(obj, target, dur = 620, delay = 0, ease = easeInOutCubic) {
+  for (let i = tweens.length - 1; i >= 0; i--) if (tweens[i].obj === obj) tweens.splice(i, 1);
+  const s = obj.userData.slot;
+  tweens.push({ obj, from: { ...s }, to: { ...s, ...target }, t: -delay, dur, ease });
+}
+
+function stepTweens(dt) {
+  for (let i = tweens.length - 1; i >= 0; i--) {
+    const tw = tweens[i];
+    tw.t += dt * 1000;
+    if (tw.t < 0) continue;
+    const k = Math.min(1, tw.t / tw.dur);
+    const e = tw.ease(k);
+    const s = tw.obj.userData.slot;
+    for (const key in tw.to) s[key] = tw.from[key] + (tw.to[key] - tw.from[key]) * e;
+    if (k >= 1) tweens.splice(i, 1);
+  }
+}
+
+const smoothCam = new THREE.PerspectiveCamera(33, 1, 1, 6000);
+smoothCam.position.copy(camera.position);
+smoothCam.quaternion.copy(camera.quaternion);
+
+const _v = new THREE.Vector3();
+const _q = new THREE.Quaternion();
+const _e = new THREE.Euler();
+
+function placeCard(card, dt) {
+  const s = card.userData.slot;
+  smoothCam.aspect = camera.aspect;
+  smoothCam.fov = camera.fov;
+  smoothCam.position.lerp(camera.position, Math.min(1, dt * 6.5));
+  smoothCam.quaternion.slerp(camera.quaternion, Math.min(1, dt * 6.5));
+  smoothCam.updateMatrixWorld();
+  smoothCam.updateProjectionMatrix();
+
+  _v.set(s.nx, s.ny, 0.5).unproject(smoothCam).sub(smoothCam.position).normalize();
+  card.position.copy(smoothCam.position).addScaledVector(_v, s.dist);
+
+  const h = card.userData.hover;
+  card.position.y += h * 14;
+  card.position.z += h * 10;
+
+  card.quaternion.copy(smoothCam.quaternion);
+  _e.set(-s.tilt - h * 0.04, 0, s.fan + s.roll);
+  _q.setFromEuler(_e);
+  card.quaternion.multiply(_q);
+
+  card.scale.setScalar(s.s * (1 + h * 0.03));
+  card.userData.face.material.opacity = s.op;
+  card.visible = s.op > 0.02;
+
+  const t = performance.now() * 0.001;
+  const glow = card.userData.glow;
+  const breathe = 0.5 + 0.5 * Math.sin(t * 1.6);
+
+  const aura = card.userData.aura;
+  aura.material.opacity = glow * (0.24 + breathe * 0.1);
+  aura.rotation.z = t * 0.28;
+  aura.scale.setScalar(1 + breathe * 0.03);
+
+  const gold = card.userData.auraGold;
+  const boost = card.userData.goldBoost;
+  gold.material.opacity = glow * boost * (0.20 + breathe * 0.14);
+  gold.rotation.z = -t * 0.16;
+  gold.scale.setScalar(1 + (1 - breathe) * 0.05);
+}
+
+/* ══════════════════ 状态机 ══════════════════ */
+
+const state = { mode: 'hand', selected: null, chosen: null, collapseClock: 0 };
+let sticky = false;
+
+const hintEl = document.querySelector('.hint .step');
+const hintText = document.getElementById('hintText');
+const legend = document.getElementById('legend');
+const popover = document.getElementById('popover');
+const popCap = document.getElementById('popCap');
+const diceRow = document.getElementById('diceRow');
+const btnWizard = document.getElementById('btnWizard');
+const btnTower = document.getElementById('btnTower');
+const tipEl = document.getElementById('tip');
+const tipK = document.getElementById('tipK');
+const tipN = document.getElementById('tipN');
+const tipM = document.getElementById('tipM');
+
+function hint(step, text) { hintEl.textContent = step; hintText.innerHTML = text; }
+function showPopover() { popover.classList.add('on'); legend.style.opacity = '0'; }
+function hidePopover() { popover.classList.remove('on'); diceRow.classList.remove('on'); legend.style.opacity = '1'; }
+
+function resetAll() {
+  handCards.forEach((c, i) => { slotTo(c, { ...HAND[i] }, 560, i * 45); c.userData.glow = 0; });
+  spellCards.forEach((c, i) => slotTo(c, { ...SPELL_REST[i] }, 480, i * 30));
+}
+
+function deselect() {
+  if (state.mode !== 'card') return;
+  state.mode = 'hand';
+  state.selected = null;
+  state.chosen = null;
+  hidePopover();
+  resetAll();
+  btnWizard.classList.remove('dim');
+  btnTower.classList.remove('dim');
+  hint('CURRENT STEP', '选择一张魔典出牌 · 或悬停左后方法术牌堆');
+  legend.innerHTML = '悬停<b>法术牌堆</b>可将其召至前景 · 点击<b>手牌</b>展开下一层';
+}
+
+function selectCard(card) {
+  if (state.mode === 'spells') collapseSpells();
+  state.mode = 'card';
+  state.selected = card;
+  state.chosen = null;
+
+  slotTo(card, { ...SELECTED }, 520);
+  handCards.forEach((c, i) => { if (c !== card) slotTo(c, { ...HAND_OUT[i] }, 480, 40); });
+  spellCards.forEach((c, i) => slotTo(c, { ...SPELL_REST[i] }, 420, i * 20));
+
+  card.userData.glow = 1;
+  card.userData.goldBoost = 1;
+  handCards.forEach(c => { if (c !== card) c.userData.goldBoost = 0; });
+  burst(card.position, 26, 0x5ec3bc, 90, 8);
+
+  popCap.textContent = '第 1 步 · 选择对象';
+  btnWizard.classList.remove('dim');
+  btnTower.classList.remove('dim');
+  diceRow.classList.remove('on');
+  showPopover();
+  hint('STEP 1 · 选择对象', `已选 <b>${card.userData.label}</b> · 移动巫师还是塔？`);
+  legend.innerHTML = '浮层吸附在卡牌下方 · 点击棋盘空白处取消';
+}
+
+function choose(mode) {
+  if (state.mode !== 'card' || state.chosen) return;
+  state.chosen = mode;
+  (mode === 'wizard' ? btnTower : btnWizard).classList.add('dim');
+  diceRow.classList.add('on');
+  popCap.textContent = '第 2 步 · 掷骰';
+  hint('STEP 2 · 掷骰', `移动${mode === 'wizard' ? '巫师' : '塔'} · 点击骰子掷出步数`);
+
+  const r = popover.getBoundingClientRect();
+  for (let i = 0; i < 10; i++) {
+    const el = document.createElement('i');
+    el.style.cssText = `position:fixed;left:${r.left + r.width * 0.5}px;top:${r.bottom - 40}px;width:4px;height:4px;border-radius:50%;background:#e4b95f;pointer-events:none;z-index:25;transition:all .5s ease-out`;
+    document.body.appendChild(el);
+    requestAnimationFrame(() => {
+      el.style.transform = `translate(${(Math.random() - 0.5) * 80}px,${-30 - Math.random() * 50}px)`;
+      el.style.opacity = '0';
+    });
+    setTimeout(() => el.remove(), 560);
+  }
+}
+
+function rollDice() {
+  if (!state.chosen) return;
+  const d = document.getElementById('dice');
+  d.classList.remove('spin');
+  void d.offsetWidth;
+  d.classList.add('spin');
+  if (state.selected) burst(state.selected.position, 34, 0xe4b95f, 130, 9);
+  popCap.textContent = '第 3 步 · 选择目标';
+  hint('STEP 3 · 选择目标', `掷出 <b>4 点</b> · 点击场上要移动的${state.chosen === 'wizard' ? '巫师' : '塔'}`);
+  legend.innerHTML = '金环＝首选目标 · 绿环＝可选落点';
+}
+
+function expandSpells() {
+  if (state.mode === 'spells') return;
+  if (state.mode === 'card') deselect();
+  state.mode = 'spells';
+  spellCards.forEach((c, i) => { slotTo(c, { ...SPELL_FAN[i], op: 1 }, 680, i * 70, easeOutCubic); c.userData.glow = 0.8; });
+  handCards.forEach((c, i) => slotTo(c, { ...DECK_STACK[i] }, 620, i * 55));
+  hint('ARCANE DECK', '法术牌堆已召至前景 · 移出视线即自动归档');
+  legend.innerHTML = '点击任一<b>符文卡</b>查看提示 · 移出视线自动收回';
+}
+
+function collapseSpells() {
+  if (state.mode !== 'spells') return;
+  state.mode = 'hand';
+  spellCards.forEach((c, i) => { slotTo(c, { ...SPELL_REST[i] }, 560, i * 45); c.userData.glow = 0; });
+  handCards.forEach((c, i) => slotTo(c, { ...HAND[i] }, 620, i * 50, easeOutCubic));
+  hint('CURRENT STEP', '选择一张魔典出牌 · 或悬停左后方法术牌堆');
+  legend.innerHTML = '悬停<b>法术牌堆</b>可将其召至前景 · 点击<b>手牌</b>展开下一层';
+}
+
+/* ══════════════════ 拾取 ══════════════════ */
+
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2(-10, -10);
+const pickables = [...handCards, ...spellCards];
+const boardPickables = [...tiles, ...towers, castle, ...wizards];
+let hoveredCard = null;
+
+function pickCard() {
+  raycaster.setFromCamera(pointer, camera);
+  const hits = raycaster.intersectObjects(pickables, true);
+  if (!hits.length) return null;
+  let o = hits[0].object;
+  while (o && o.userData.kind !== 'card') o = o.parent;
+  return o;
+}
+
+function pickBoard() {
+  raycaster.setFromCamera(pointer, camera);
+  const hits = raycaster.intersectObjects(boardPickables, true);
+  if (!hits.length) return null;
+  let o = hits[0].object;
+  while (o && !o.userData.kind) o = o.parent;
+  return o && o.userData.kind !== 'card' ? o : null;
+}
+
+const hoverRing = new THREE.Mesh(
+  new THREE.RingGeometry(66, 84, 48),
+  new THREE.MeshBasicMaterial({ color: 0x5ec3bc, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending })
+);
+hoverRing.rotation.x = -Math.PI / 2;
+hoverRing.position.y = 24;
+board.add(hoverRing);
+
+let drag = null;
+addEventListener('pointerdown', e => {
+  drag = { x: e.clientX, y: e.clientY, yaw: cam.tYaw, pitch: cam.tPitch, moved: 0 };
+});
+addEventListener('pointermove', e => {
+  pointer.x = (e.clientX / innerWidth) * 2 - 1;
+  pointer.y = -(e.clientY / innerHeight) * 2 + 1;
+  if (drag) {
+    const dx = e.clientX - drag.x;
+    const dy = e.clientY - drag.y;
+    drag.moved = Math.max(drag.moved, Math.abs(dx) + Math.abs(dy));
+    cam.tYaw = drag.yaw - dx * 0.0022;
+    cam.tPitch = THREE.MathUtils.clamp(drag.pitch + dy * 0.09, 24, 52);
+  }
+});
+addEventListener('pointerup', e => {
+  const moved = drag ? drag.moved : 0;
+  drag = null;
+  if (moved > 6) return;
+  if (e.target.closest('.popover') || e.target.closest('.endturn')) return;
+
+  const card = pickCard();
+  if (card) {
+    if (handCards.includes(card) && state.mode === 'hand') { selectCard(card); return; }
+    if (state.mode === 'spells' && spellCards.includes(card)) {
+      const tips = {
+        移动巫师: '移动巫师 · 顺时针 1 格',
+        移动塔: '移动塔 · 推进 2 格',
+        解封巫师: '解封巫师 · 塔内若无你的巫师，药水依然消耗',
+        移动城堡: '移动城堡 · 鸦堡随塔迁移',
+      };
+      hint('RUNE ACTIVE', tips[card.userData.label] || card.userData.label);
+      burst(card.position, 22, 0x5ec3bc, 110, 8);
+      return;
+    }
+    return;
+  }
+
+  const target = pickBoard();
+  if (target && target.userData.kind) {
+    const wp = new THREE.Vector3();
+    target.getWorldPosition(wp);
+    wp.y += 60;
+    burst(wp, 18, 0x9ed6d5, 70, 7);
+    return;
+  }
+
+  if (state.mode === 'card') deselect();
+});
+
+addEventListener('wheel', e => {
+  cam.tDist = THREE.MathUtils.clamp(cam.tDist + e.deltaY * 0.6, 1150, 2100);
+}, { passive: true });
+
+btnWizard.addEventListener('click', e => { e.stopPropagation(); choose('wizard'); });
+btnTower.addEventListener('click', e => { e.stopPropagation(); choose('tower'); });
+document.getElementById('dice').addEventListener('click', e => { e.stopPropagation(); rollDice(); });
+
+/* ══════════════════ 浮层跟随 ══════════════════ */
+
+function updatePopover() {
+  if (state.mode !== 'card' || !state.selected) return;
+  const v = state.selected.position.clone();
+  const dist = camera.position.distanceTo(v);
+  const worldPerPx = (2 * dist * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) / innerHeight;
+  const screenH = (CARD_H * state.selected.userData.slot.s) / worldPerPx;
+
+  v.project(camera);
+  const x = (v.x * 0.5 + 0.5) * innerWidth;
+  const y = (-v.y * 0.5 + 0.5) * innerHeight + screenH * 0.52 + 10;
+
+  const w = popover.offsetWidth || 300;
+  const h = popover.offsetHeight || 120;
+  popover.style.left = `${THREE.MathUtils.clamp(x, w / 2 + 12, innerWidth - w / 2 - 12)}px`;
+  popover.style.top = `${THREE.MathUtils.clamp(y, 80, innerHeight - h - 16)}px`;
+}
+
+/* ══════════════════ 主循环 ══════════════════ */
+
+const clock = new THREE.Clock();
+let fireflyClock = 0;
+const lastCardPos = new Map();
+
+const runeRing = new THREE.Mesh(
+  new THREE.RingGeometry(BOARD_R - 26, BOARD_R - 12, 96),
+  new THREE.MeshBasicMaterial({ color: 0x5ec3bc, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending })
+);
+runeRing.rotation.x = -Math.PI / 2;
+runeRing.position.y = 3;
+board.add(runeRing);
+
+function tick() {
+  requestAnimationFrame(tick);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const now = clock.elapsedTime;
+
+  stepTweens(dt);
+
+  cam.yaw += (cam.tYaw - cam.yaw) * Math.min(1, dt * 5);
+  cam.pitch += (cam.tPitch - cam.pitch) * Math.min(1, dt * 5);
+  cam.dist += (cam.tDist - cam.dist) * Math.min(1, dt * 5);
+  applyCamera();
+
+  const card = pickCard();
+  hoveredCard = card;
+  const overSpell = card && spellCards.includes(card);
+
+  if (state.mode === 'hand' && overSpell) { expandSpells(); state.collapseClock = 0; }
+  else if (state.mode === 'spells') {
+    if (sticky || overSpell) state.collapseClock = 0;
+    else {
+      state.collapseClock += dt;
+      if (!sticky && state.collapseClock > 0.55) collapseSpells();
+    }
+  }
+
+  handCards.concat(spellCards).forEach(c => {
+    const want = (c === card && c.visible) ? 1 : 0;
+    c.userData.hover += (want - c.userData.hover) * Math.min(1, dt * 12);
+    const boostWant = (c === card || c === state.selected) ? 1 : 0;
+    c.userData.goldBoost += (boostWant - c.userData.goldBoost) * Math.min(1, dt * 9);
+    placeCard(c, dt);
+
+    const prev = lastCardPos.get(c);
+    if (prev) {
+      if (prev.distanceTo(c.position) > 6 && Math.random() < 0.5) {
+        spawn(c.position.x + (Math.random() - 0.5) * 90, c.position.y - 40 + Math.random() * 60, c.position.z,
+          (Math.random() - 0.5) * 24, 20 + Math.random() * 30, (Math.random() - 0.5) * 24,
+          0.6 + Math.random() * 0.5, 6, c.userData.cardKind === 'spell' ? 0x9ed6d5 : 0xe4b95f);
+      }
+      prev.copy(c.position);
+    } else {
+      lastCardPos.set(c, c.position.clone());
+    }
+  });
+
+  const b = card ? null : pickBoard();
+  if (b && b.userData.kind) {
+    const wp = new THREE.Vector3();
+    b.getWorldPosition(wp);
+    hoverRing.position.set(wp.x, 26, wp.z);
+    hoverRing.material.opacity += (0.55 - hoverRing.material.opacity) * Math.min(1, dt * 10);
+    tipEl.classList.add('on');
+    tipK.textContent = b.userData.kind === 'wizard' ? 'WIZARD' : b.userData.kind === 'castle' ? 'RAVENSKEEP' : 'TOWER';
+    tipN.textContent = b.userData.name || '石塔';
+    tipM.textContent = b.userData.kind === 'wizard' ? '塔顶 · 可移动 1 格' : `第 ${(b.userData.index ?? 0) + 1} 格 · 可整体移动`;
+    tipEl.style.left = `${(pointer.x * 0.5 + 0.5) * innerWidth}px`;
+    tipEl.style.top = `${(-pointer.y * 0.5 + 0.5) * innerHeight - 10}px`;
+  } else {
+    hoverRing.material.opacity += (0 - hoverRing.material.opacity) * Math.min(1, dt * 10);
+    tipEl.classList.remove('on');
+  }
+
+  updatePopover();
+
+  runeLight.intensity = 3.2 + Math.sin(now * 1.5) * 0.7;
+  runeRing.material.opacity = 0.16 + Math.sin(now * 1.1) * 0.07;
+  runeRing.rotation.z = now * 0.05;
+
+  motes.rotation.y += dt * 0.012;
+  const mp = motes.geometry.attributes.position;
+  for (let i = 0; i < MOTE_N; i++) {
+    mp.array[i * 3 + 1] += dt * (5 + (i % 7));
+    if (mp.array[i * 3 + 1] > 520) mp.array[i * 3 + 1] = -40;
+  }
+  mp.needsUpdate = true;
+
+  fireflyClock += dt;
+  if (fireflyClock > 0.22) {
+    fireflyClock = 0;
+    const t = towers[Math.floor(Math.random() * towers.length)];
+    if (t) spawn(t.position.x + (Math.random() - 0.5) * 120, 120 + Math.random() * 160, t.position.z + (Math.random() - 0.5) * 120,
+      (Math.random() - 0.5) * 12, 12 + Math.random() * 18, (Math.random() - 0.5) * 12,
+      1.4 + Math.random(), 7, 0xffe9b0);
+  }
+
+  updateParticles(dt);
+  renderer.render(scene, camera);
+}
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+document.getElementById('endTurn').addEventListener('click', () => {
+  if (state.mode === 'card') deselect();
+  document.getElementById('pip2').classList.add('on');
+  document.getElementById('actionNum').textContent = '2 / 2';
+  hint('CURRENT STEP', '行动 2 · 再出一张牌，或结束回合');
+});
+
+resetAll();
+tick();
+
+const __q = new URLSearchParams(location.search);
+const __instant = __q.get('instant') === '1';
+if (__q.get('demo') === 'card') {
+  setTimeout(() => selectCard(handCards[1]), 900);
+  if (__instant) {
+    tweens.length = 0;
+    Object.assign(handCards[1].userData.slot, SELECTED);
+    handCards.forEach((c, i) => { if (i !== 1) Object.assign(c.userData.slot, HAND_OUT[i]); });
+    handCards[1].userData.glow = 1;
+    state.mode = 'card'; state.selected = handCards[1];
+    showPopover();
+  }
+}
+if (__q.get('demo') === 'spell') {
+  sticky = true;
+  setTimeout(() => expandSpells(), 900);
+  if (__instant) {
+    tweens.length = 0;
+    state.mode = 'spells';
+    spellCards.forEach((c, i) => { Object.assign(c.userData.slot, SPELL_FAN[i]); c.userData.glow = 0.8; });
+    handCards.forEach((c, i) => Object.assign(c.userData.slot, DECK_STACK[i]));
+  }
+}
+</script>
+</body>
+</html>
