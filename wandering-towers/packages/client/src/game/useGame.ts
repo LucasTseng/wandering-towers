@@ -29,6 +29,8 @@ export interface UseGameResult {
   isFinished: boolean;
   /** 导出当前对局为 SaveGame（用于回放） */
   exportSave: (gameId?: string) => SaveGame;
+  /** 开新局：重建引擎、清空事件流与结束标志（结算页「再来一局」用） */
+  reset: () => void;
   /** 本局 seed（用于回放构造 SaveGame） */
   seed: number;
 }
@@ -53,6 +55,8 @@ export function useGame(config: GameConfig, seed: number): UseGameResult {
     engine.state.turnPhase === 'GAME_FINISHED',
   );
   const [tick, setTick] = useState(0);
+  // 新一局换一个 seed，避免「再来一局」拿到完全相同的牌序；导出回放时也要用当前 seed
+  const [currentSeed, setCurrentSeed] = useState(seed);
 
   const dispatch = useCallback(
     (command: ActionCommand): ExecuteResult => {
@@ -89,14 +93,33 @@ export function useGame(config: GameConfig, seed: number): UseGameResult {
         version: '1.0',
         savedAt: new Date().toISOString(),
         config,
-        seed,
+        seed: currentSeed,
         initialEvents: [...initEvents],
         recordedEvents: [...recordedEvents],
         finalState: finalSnapshot,
       };
     },
-    [engine, config, seed, initEvents, recordedEvents],
+    [engine, config, currentSeed, initEvents, recordedEvents],
   );
 
-  return { state, events, recordedEvents, dispatch, isFinished, exportSave, seed };
+  const reset = useCallback(() => {
+    const nextSeed = (currentSeed + 1 + Math.floor(Math.random() * 1_000_000)) >>> 0;
+    setCurrentSeed(nextSeed);
+    engineRef.current = new RuleEngine(config, { seed: nextSeed });
+    setRecordedEvents([]);
+    setIsFinished(false);
+    // tick 会让 state / events / dispatch 在下一次渲染全部切到新引擎
+    setTick((t) => t + 1);
+  }, [config, currentSeed]);
+
+  return {
+    state,
+    events,
+    recordedEvents,
+    dispatch,
+    isFinished,
+    exportSave,
+    reset,
+    seed: currentSeed,
+  };
 }

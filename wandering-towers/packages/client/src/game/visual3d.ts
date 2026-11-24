@@ -13,7 +13,8 @@ export const VISUAL_3D = {
   towerSideDepth: 7,
   maxTowerLayers: 9,
 
-  castleSize: 58,
+  // A05：素材约束「鸦堡宽 = 塔顶 55–65%」，48 / 76 ≈ 63%（原 58 偏大，会压住塔顶巫师位）
+  castleSize: 48,
   castleHeight: 48,
 
   wizardRadius: 8,

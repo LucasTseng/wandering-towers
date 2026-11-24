@@ -1,14 +1,19 @@
+import type { CSSProperties } from 'react';
 import type { GameState, PlayerID, PotionState } from '@wt/shared';
 import { PotionState as PS } from '@wt/shared';
 import { PLAYER_COLORS } from '../game/config';
+import { Prism3D } from './Prism3D';
 
 interface PotionPanelProps {
   state: GameState;
   playerId: PlayerID;
 }
 
-/** 魔法药水区（简洁药水瓶样式）
- * 三态：满药水(蓝) / 空瓶(白) / 已使用(灰) */
+/**
+ * D02 药水瓶三态 —— v2 真 3D：10 边圆柱瓶（Ø18 × 22）+ 液面圆盘按状态
+ * 落在 Z=15 / 4 / 0 + 8 边瓶颈 + 木塞，与 3D-asset-stage.html 的 potion() 同源。
+ * SPENT 的降饱和只施加在叶子面，不放在 preserve-3d 容器上。
+ */
 export function PotionPanel({ state, playerId }: PotionPanelProps) {
   const player = state.players[playerId];
   if (!player) return null;
@@ -19,54 +24,99 @@ export function PotionPanel({ state, playerId }: PotionPanelProps) {
   const spent = states.filter((s) => s === PS.SPENT).length;
 
   return (
-    <div style={{ border: `1px solid ${color}`, borderRadius: 6, padding: 6, background: 'rgba(20,22,28,0.92)', color: '#f4ead1' }}>
-      <div style={{ fontWeight: 'bold', marginBottom: 4, fontSize: 12, color }}>
-        魔法药水（{playerId}）
-      </div>
-      <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', marginBottom: 4 }}>
+    <div className="va-panel va-panel-thick" style={{ padding: 6 }}>
+      <div className="va-panel-title" style={{ color }}>魔法药水 · {playerId}</div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '8px 0 9px', paddingLeft: 3 }}>
         {states.map((ps, i) => (
-          <PotionBottle key={i} state={ps} />
+          <PotionBottle key={i} state={ps} color={color} />
         ))}
       </div>
-      <div style={{ fontSize: 10, color: '#a0a8b8' }}>
+      <div className="va-divider" />
+      <div style={{ fontSize: 10, color: '#b8bcc6', marginTop: 4 }}>
         满 {full} · 空 {empty} · 已耗 {spent}
       </div>
     </div>
   );
 }
 
-/** 简洁药水瓶 */
-function PotionBottle({ state }: { state: PotionState }) {
-  const isFull = state === PS.FULL;
-  const isSpent = state === PS.SPENT;
-
-  const bgColor = isFull ? '#3498db' : isSpent ? '#aaa' : '#fff';
+function PotionBottle({ state, color }: { state: PotionState; color: string }) {
+  const h = 22;
+  const liquidZ = state === PS.FULL ? 15 : state === PS.EMPTY ? 4 : 0;
+  const dim = state === PS.SPENT;
+  const leafFilter: CSSProperties['filter'] = dim ? 'saturate(0.35) opacity(0.6)' : undefined;
+  const label = state === PS.FULL ? '满药水' : state === PS.SPENT ? '已耗' : '空瓶';
 
   return (
     <div
-      title={isFull ? '满药水' : isSpent ? '已耗' : '空瓶'}
-      style={{
-        width: 18,
-        height: 22,
-        borderRadius: '3px 3px 4px 4px',
-        background: bgColor,
-        border: '1px solid rgba(100,100,100,0.4)',
-        boxShadow: '0 1px 2px rgba(0,0,0,0.2)',
-        position: 'relative',
-      }}
+      className="va-ui-3d"
+      title={label}
+      style={{ position: 'relative', width: 22, height: 36, flex: '0 0 auto' }}
     >
-      {/* 瓶塞 */}
-      <div
-        style={{
-          position: 'absolute',
-          top: -2,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: 6,
-          height: 3,
-          background: '#555',
-          borderRadius: 1,
+      <Prism3D
+        sides={10}
+        radius={9}
+        height={h}
+        start={Math.PI / 10}
+        // 界面层不在 58° 舞台里，局部倾斜后才能看见瓶身侧壁与液面厚度
+        extraTransform="rotateX(-52deg)"
+        sideClassName="va-potion-side"
+        sideVars={() => ({ filter: leafFilter } as CSSProperties)}
+        topStyle={{
+          background: 'rgba(143,160,168,0.45)',
+          borderRadius: '50%',
+          filter: leafFilter,
         }}
+        overlay={
+          <>
+            {/* 液面圆盘：真实 Z 位移区分三态 */}
+            {liquidZ > 0 && (
+              <div
+                className="va-potion-liquid-disc"
+                style={{
+                  position: 'absolute',
+                  left: '50%',
+                  top: '50%',
+                  width: 15,
+                  height: 15,
+                  marginLeft: -7.5,
+                  marginTop: -7.5,
+                  background: state === PS.FULL ? color : 'rgba(154,168,174,0.5)',
+                  color: state === PS.FULL ? color : 'transparent',
+                  filter: leafFilter,
+                  transform: `translateZ(${liquidZ}px)`,
+                }}
+              />
+            )}
+            {/* 8 边瓶颈 */}
+            <Prism3D
+              sides={8}
+              radius={4}
+              height={5}
+              z={h}
+              start={Math.PI / 8}
+              sideClassName="va-potion-side"
+              sideVars={() => ({ filter: leafFilter } as CSSProperties)}
+              topStyle={{ background: 'rgba(143,160,168,0.55)', filter: leafFilter }}
+            />
+            {/* 木塞：已用态倾斜开塞 */}
+            <div
+              className="va-potion-cork"
+              style={{
+                position: 'absolute',
+                left: '50%',
+                top: '50%',
+                width: 9,
+                height: 4,
+                marginLeft: -4.5,
+                marginTop: -2,
+                filter: leafFilter,
+                transform: `translateZ(${h + 6}px)${dim ? ' rotateZ(-18deg)' : ''}`,
+              }}
+            />
+            {/* 玻璃竖向高光 */}
+            <div className="va-potion-glint-3d" style={{ transform: 'translateZ(2px)' }} />
+          </>
+        }
       />
     </div>
   );

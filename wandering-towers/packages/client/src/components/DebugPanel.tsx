@@ -127,15 +127,16 @@ export function DebugPanel({ state, dispatch }: DebugPanelProps) {
           justifyContent: 'space-between',
           alignItems: 'center',
           padding: '4px 8px',
-          background: '#333',
-          color: '#fff',
+          background: 'linear-gradient(180deg, #3b3f4a, #2b303a)',
+          borderBottom: '1px solid rgba(122,108,80,0.8)',
+          color: '#f5e9c8',
           borderRadius: '6px 6px 0 0',
           cursor: 'pointer',
           flexShrink: 0,
         }}
         onClick={() => setCollapsed((c) => !c)}
       >
-        <strong>🐞 调试面板</strong>
+        <strong>调试面板</strong>
         <span>{collapsed ? '展开 ▲' : '收起 ▼'}</span>
       </div>
 
@@ -208,7 +209,7 @@ export function DebugPanel({ state, dispatch }: DebugPanelProps) {
                     <td style={td}>{t.id}</td>
                     <td style={td}>{towerLocation(state, t.id)}</td>
                     <td style={td}>{t.hasRavenShield ? '✓' : ''}</td>
-                    <td style={td}>{t.sealed ? '🔒' : ''}</td>
+                    <td style={td}>{t.sealed ? '封' : ''}</td>
                     <td style={td}>[{t.imprisonedWizards.join(', ')}]</td>
                   </tr>
                 ))}

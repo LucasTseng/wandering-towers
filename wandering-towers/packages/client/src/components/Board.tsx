@@ -47,6 +47,7 @@ export function Board({
       }}
     >
       <div
+        className="va-board-base"
         style={{
           position: 'absolute',
           left: center - VISUAL_3D.boardRadius,
@@ -54,14 +55,12 @@ export function Board({
           width: VISUAL_3D.boardRadius * 2,
           height: VISUAL_3D.boardRadius * 2,
           borderRadius: '50%',
-          background: 'radial-gradient(circle at 42% 34%, #89966c 0%, #738058 45%, #596442 100%)',
-          boxShadow:
-            'inset 0 0 42px rgba(25,30,20,0.35), 0 18px 0 #465132, 0 24px 24px rgba(0,0,0,0.35)',
           transform: `translateZ(${VISUAL_3D.boardHeight}px)`,
           zIndex: 0,
         }}
       />
       <div
+        className="va-board-rim"
         style={{
           position: 'absolute',
           left: center - VISUAL_3D.boardRadius,
@@ -69,8 +68,6 @@ export function Board({
           width: VISUAL_3D.boardRadius * 2,
           height: VISUAL_3D.boardRimDepth,
           borderRadius: VISUAL_3D.boardRimDepth,
-          background: 'linear-gradient(180deg, #5e6b44 0%, #3f4a2c 100%)',
-          boxShadow: '0 8px 18px rgba(0,0,0,0.35)',
           transform: `translateZ(${VISUAL_3D.boardHeight / 2}px)`,
           zIndex: 0,
         }}

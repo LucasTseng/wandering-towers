@@ -15,7 +15,6 @@ import { moveWizardExact, isOwnVisibleWizard } from './move-wizard';
 import { advanceOrEndTurn, type ActionOutcome } from './turn-flow';
 import { moveTowerSegment } from './move-tower';
 import { advanceRavenCastleAfterWizardEntered } from './raven-castle';
-import { checkEndgameTrigger } from './endgame'; // Will be used in later tasks
 import { maybeFillOnePotionForImprisonment } from './potion';
 
 /**
@@ -144,9 +143,9 @@ export function playMovementCard(
   // 6.3-6.4 进堡 -> 城堡移动 + 立即结束回合
   if (enteredCastle) {
     advanceRavenCastleAfterWizardEntered(state, emit);
-    // 终局检查（进堡可能达成终局）
-    const triggered = checkEndgameTrigger(state, playerId, emit);
-    return { endTurn: true, endgameTriggered: triggered };
+    // 终局检查统一由 RuleEngine 在 applyEvents 之后对所有玩家执行，
+    // 此处只负责「进堡 -> 城堡移动 + 立即结束回合」。
+    return { endTurn: true, endgameTriggered: false };
   }
 
   return advanceOrEndTurn(state, emit);

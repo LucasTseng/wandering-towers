@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>巫师飞塔 · 真 3D 素材台</title>
+<style>
+  :root {
+    --pitch: 58deg;
+    --spin: 0deg;
+    --zoom: 1;
+    --persp: 1200px;
+
+    --va-stage: #1a1d24;
+    --va-stone: #3b3f4a;
+    --va-warm: #d9c9a3;
+    --va-paper-ink: #f5e9c8;
+    --va-blue: #7fb3ff;
+    --va-blue-deep: #224d82;
+    --va-gold: #e8b339;
+    --va-green: #27ae60;
+    --va-wine: #7a2436;
+    --va-lime: #a8d84a;
+
+    --paper: #f6f2e8;
+    --card: #fffdf8;
+    --ink: #22262f;
+    --muted: #6f6a5e;
+    --line: #e3dac6;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 36px 30px 60px;
+    background: radial-gradient(circle at 10% 0%, #fffdf6 0%, transparent 42%), var(--paper);
+    color: var(--ink);
+    font: 14px/1.6 "PingFang SC", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1240px; margin: 0 auto; }
+  header { border-bottom: 1px solid var(--line); padding-bottom: 20px; margin-bottom: 22px; }
+  .eyebrow { font-size: 11px; letter-spacing: 2.2px; color: var(--va-wine); font-weight: 700; }
+  h1 { margin: 8px 0 6px; font-size: 29px; letter-spacing: .8px; }
+  .lede { margin: 0; color: var(--muted); font-size: 13px; max-width: 900px; }
+  .tags { margin-top: 13px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .tag { font-size: 11px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 20px; background: #fffdf8; color: var(--muted); }
+  .tag.key { border-color: #d9c7a4; color: #7a5a24; background: #fbf3e2; }
+
+  .controls {
+    display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+    border: 1px solid var(--line); border-radius: 12px; background: var(--card);
+    padding: 13px 18px; margin-bottom: 20px;
+  }
+  .ctrl { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+  .ctrl b { color: var(--ink); font-weight: 600; min-width: 40px; display: inline-block; text-align: right; font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 118px; accent-color: #7a2436; }
+  button.act {
+    border: 1px solid var(--line); border-radius: 6px; background: #fffdf8;
+    color: var(--ink); font: inherit; font-size: 12px; padding: 5px 12px; cursor: pointer;
+  }
+  button.act:hover { background: #f3ecdc; border-color: #c9b489; }
+  button.act.on { background: #7a2436; color: #fff; border-color: #7a2436; }
+  .hint { font-size: 11px; color: var(--muted); margin-left: auto; }
+
+  h2 { font-size: 16px; margin: 30px 0 4px; letter-spacing: .5px; display: flex; align-items: center; gap: 10px; }
+  h2::before { content: ''; width: 4px; height: 16px; border-radius: 2px; background: var(--va-wine); }
+  .sub { color: var(--muted); font-size: 12px; margin: 0 0 14px 14px; }
+
+  .vp {
+    position: relative; overflow: hidden;
+    background: radial-gradient(circle at 50% 38%, #2a2d35 0%, #14161c 100%);
+    perspective: var(--persp); perspective-origin: 50% 40%;
+    cursor: grab; user-select: none; touch-action: none;
+  }
+  .vp::after { content: ''; position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 40px rgba(0,0,0,.45); }
+  .vp.drag { cursor: grabbing; }
+  .world {
+    position: absolute; inset: 0;
+    transform-style: preserve-3d;
+    transform: rotateX(var(--pitch)) rotateZ(var(--spin)) scale(var(--zoom));
+    transition: transform 80ms linear;
+  }
+  .anchor {
+    position: absolute; left: 50%; top: 50%; width: 0; height: 0;
+    transform-style: preserve-3d;
+  }
+  .hero-vp { height: 380px; border-radius: 14px; border: 1px solid #2a2d35; }
+  /* Z 轴在 58° 斜俯下向屏幕上方投影，故把组合装配的锚点下移，避免 9 层塔顶被视口上沿裁掉 */
+  .hero-vp .anchor { top: 66%; transform: scale(1); }
+  .vp-label {
+    position: absolute; left: 12px; top: 10px; z-index: 5;
+    font-size: 11px; letter-spacing: 1px; color: var(--va-paper-ink); opacity: .8;
+    background: rgba(20,22,28,.6); padding: 3px 9px; border-radius: 5px; pointer-events: none;
+  }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(286px, 1fr)); gap: 14px; }
+  .item { border: 1px solid var(--line); border-radius: 12px; background: var(--card); overflow: hidden; }
+  .item .vp { height: 214px; border-bottom: 1px solid rgba(0,0,0,.1); }
+  .item .anchor { transform: scale(1.42); }
+  .meta { padding: 11px 13px 13px; position: relative; }
+  .code { font-size: 10px; font-weight: 700; letter-spacing: 1.3px; color: var(--va-wine); }
+  .name { font-size: 13.5px; font-weight: 700; margin: 1px 0 5px; }
+  .desc { font-size: 11.5px; color: var(--muted); line-height: 1.55; }
+  .specline { margin-top: 8px; font-size: 10.5px; color: #5c6472; font-family: ui-monospace, Consolas, monospace; line-height: 1.5; }
+  .row { margin-top: 8px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .use { font-size: 10.5px; color: #7a6a4c; background: #f7f1e3; border-radius: 5px; padding: 3px 7px; }
+  .geom { font-size: 10.5px; color: #3d5a80; background: #eaf2fb; border-radius: 5px; padding: 3px 7px; }
+  .snip-btn { margin-left: auto; font-size: 10.5px; border: 1px solid var(--line); background: #fffdf8; border-radius: 5px; padding: 3px 8px; cursor: pointer; color: var(--muted); }
+  .snip-btn:hover { border-color: #c9b489; color: var(--ink); }
+
+  .specs { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+  .spec-card { border: 1px solid var(--line); border-radius: 12px; background: var(--card); padding: 14px 16px; }
+  .spec-card h3 { margin: 0 0 9px; font-size: 13px; }
+  .spec-card table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  .spec-card td { padding: 4px 0; border-bottom: 1px solid #f0eada; color: var(--muted); }
+  .spec-card td:last-child { text-align: right; color: var(--ink); font-family: ui-monospace, Consolas, monospace; }
+  .note { font-size: 11.5px; color: var(--muted); line-height: 1.7; margin: 0; }
+
+  .drawer {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
+    background: #171a21; color: #e8e2d2; border-top: 2px solid var(--va-wine);
+    box-shadow: 0 -12px 36px rgba(0,0,0,.3);
+    transform: translateY(101%); transition: transform 220ms ease;
+    max-height: 56vh; overflow: auto;
+  }
+  .drawer.open { transform: translateY(0); }
+  .drawer-in { max-width: 1240px; margin: 0 auto; padding: 16px 24px 24px; }
+  .drawer-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+  .drawer-head b { font-size: 14px; color: #f5e9c8; }
+  .drawer-head span { font-size: 11px; color: #9aa2b1; }
+  .drawer-head button { margin-left: auto; background: transparent; border: 1px solid #4a4e59; color: #e8e2d2; border-radius: 5px; padding: 3px 10px; cursor: pointer; font: inherit; font-size: 11px; }
+  pre { margin: 0; padding: 13px 15px; background: #10131a; border: 1px solid #2c313c; border-radius: 8px; font: 11.5px/1.65 ui-monospace, Consolas, monospace; color: #cdd6e4; white-space: pre-wrap; }
+  footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 11px; color: var(--muted); display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+
+  /* ---------- 与 packages/client/src/styles/visual-assets.css 同源的材质类 ---------- */
+  .va-tower-side {
+    background-image:
+      repeating-linear-gradient(0deg, transparent 0 10px, rgba(20,22,28,.4) 10px 11px),
+      repeating-linear-gradient(90deg, transparent 0 13px, rgba(255,255,255,.05) 13px 14px),
+      linear-gradient(180deg, var(--side-top, #6a7180), var(--side-bottom, #4a5060));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.12), inset 0 -3px 0 rgba(0,0,0,.28);
+  }
+  .va-tower-side::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: rgba(12,14,20,.55); }
+  .va-tower-face {
+    background-image:
+      repeating-linear-gradient(28deg, transparent 0 11px, rgba(40,34,24,.09) 11px 12px),
+      radial-gradient(ellipse at 34% 26%, rgba(255,244,214,.32), transparent 62%),
+      linear-gradient(135deg, #c9b98f, #a2916d);
+    box-shadow: inset 0 2px 0 rgba(255,240,205,.5), inset 0 -2px 0 rgba(0,0,0,.22);
+  }
+  .va-tower-face[data-variant='raven'] {
+    background-image:
+      repeating-linear-gradient(28deg, transparent 0 11px, rgba(30,40,60,.1) 11px 12px),
+      radial-gradient(ellipse at 34% 26%, rgba(220,235,255,.28), transparent 62%),
+      linear-gradient(135deg, #a9b6c9, #8b98ae);
+  }
+  .va-tower-face::before {
+    content: ''; position: absolute; inset: 9px;
+    clip-path: polygon(30% 0%,70% 0%,100% 30%,100% 70%,70% 100%,30% 100%,0% 70%,0% 30%);
+    border: 1px solid rgba(122,108,80,.55);
+  }
+  .va-battlement { background: linear-gradient(180deg,#c9b98f,#a2916d); border: 1px solid rgba(50,44,34,.45); box-shadow: inset 0 1px 0 rgba(255,240,205,.45), 0 1px 2px rgba(0,0,0,.35); }
+  .va-battlement[data-variant='raven'] { background: linear-gradient(180deg,#a9b6c9,#8b98ae); }
+  .va-raven {
+    background: radial-gradient(circle at 50% 38%, #a8d0ff 0%, #4b83c8 62%, var(--va-blue-deep) 100%);
+    border: 1px solid rgba(232,214,172,.95); border-radius: 50%;
+    box-shadow: 0 0 9px rgba(127,179,255,.75), inset 0 0 4px rgba(255,255,255,.45);
+  }
+  .va-raven-bird { background: #0f1420; clip-path: polygon(0% 38%,24% 0%,40% 30%,50% 8%,60% 30%,76% 0%,100% 38%,72% 38%,50% 100%,28% 38%); }
+  .va-castle-side {
+    background-image:
+      repeating-linear-gradient(0deg, transparent 0 7px, rgba(12,16,26,.35) 7px 8px),
+      linear-gradient(180deg, #4b5066, #2b3042);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.1), inset 0 -2px 0 rgba(0,0,0,.25);
+  }
+  .va-window { background: linear-gradient(180deg,#ffe9a8,#e8b339 60%,#a2761c); box-shadow: 0 0 7px rgba(232,179,57,.75); border-radius: 3px 3px 1px 1px; animation: flick 3.2s ease-in-out infinite; }
+  .va-door { background: #1b1f2c; border-radius: 8px 8px 0 0; box-shadow: inset 0 2px 3px rgba(0,0,0,.8); }
+  .va-roof { background: linear-gradient(135deg,#7a4250,#5a2634 62%,#3a1622); box-shadow: inset 0 1px 0 rgba(255,200,200,.22), 0 1px 0 rgba(0,0,0,.45); }
+  .va-tile-face {
+    background-image:
+      radial-gradient(ellipse at 50% 50%, transparent 0 56%, rgba(127,179,255,.42) 56.5% 57.2%, transparent 57.8%),
+      repeating-linear-gradient(28deg, transparent 0 13px, rgba(255,255,255,.05) 13px 14px),
+      repeating-linear-gradient(-62deg, transparent 0 19px, rgba(0,0,0,.1) 19px 20px),
+      radial-gradient(ellipse at 32% 74%, rgba(246,160,44,.28), transparent 62%),
+      radial-gradient(ellipse at 72% 26%, rgba(127,179,255,.18), transparent 58%),
+      linear-gradient(135deg,#565c68,#40454f);
+    box-shadow: inset 0 2px 0 rgba(255,255,255,.14), inset 0 -3px 0 rgba(0,0,0,.28);
+  }
+  .va-tile-side { background-image: repeating-linear-gradient(0deg, transparent 0 5px, rgba(0,0,0,.22) 5px 6px), linear-gradient(180deg,#565c68,#2b303a); box-shadow: inset 0 -2px 0 rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.1); }
+  .va-board-base {
+    background-image:
+      radial-gradient(ellipse at 50% 50%, transparent 0 66%, rgba(127,179,255,.28) 66.5% 67.2%, transparent 68%),
+      radial-gradient(ellipse at 50% 50%, transparent 0 72%, rgba(20,24,32,.55) 72.5% 74%, transparent 75%),
+      linear-gradient(135deg,#3f4550,#2b303a 58%,#232833);
+    border-radius: 50%; box-shadow: inset 0 0 46px rgba(10,12,18,.45), 0 18px 0 #232833, 0 26px 30px rgba(0,0,0,.45);
+  }
+  .va-board-rim { background-image: repeating-linear-gradient(90deg, transparent 0 22px, rgba(0,0,0,.2) 22px 24px), linear-gradient(180deg,#4a505c,#2b303a); border-radius: 40px; }
+  .va-wizard-robe { background-image: linear-gradient(90deg, rgba(0,0,0,.28), transparent 42%, rgba(255,255,255,.16)); background-color: var(--robe,#888); clip-path: polygon(50% 0%,8% 88%,20% 100%,80% 100%,92% 88%); }
+  .va-wizard-hat { background-image: linear-gradient(90deg, rgba(0,0,0,.32), transparent 55%, rgba(255,255,255,.12)); background-color: var(--hat,#666); clip-path: polygon(50% 0%,100% 100%,0% 100%); filter: brightness(.86); }
+  .va-wizard-brim { border-radius: 50%; background: var(--hat,#666); box-shadow: 0 1px 1px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.2); filter: brightness(.8); }
+  .va-wizard-face { background: radial-gradient(ellipse at 50% 40%,#2a2027,#14161c); border-radius: 50% 50% 45% 45%; opacity: .82; }
+  .va-levitate { border-radius: 50%; border: 2px solid rgba(127,179,255,.62); box-shadow: 0 0 14px rgba(127,179,255,.28), inset 0 0 12px rgba(127,179,255,.16); animation: breathe 3.6s ease-in-out infinite; }
+  .va-levitate::before { content: ''; position: absolute; inset: 7px; border-radius: 50%; border: 1px dashed rgba(168,208,255,.48); }
+  .va-levitate-shadow { border-radius: 50%; background: radial-gradient(ellipse at 50% 50%, rgba(0,0,0,.42), transparent 70%); }
+  .va-spark { border-radius: 50%; background: var(--va-lime); box-shadow: 0 0 5px currentColor; animation: drift 4.5s ease-in-out infinite; }
+  .va-spark[data-tone='ruby'] { background: #e88fa3; }
+  .va-flame { border-radius: 50% 50% 45% 45%; background: linear-gradient(180deg,#fff4ba,#f6a02c 52%,#b27a34); box-shadow: 0 0 8px rgba(246,160,44,.8); }
+  .va-flame-holder { background: var(--va-warm); border-radius: 2px; }
+  .va-ring { border-radius: 50%; }
+  .va-ring.target { border: 2px solid var(--va-gold); box-shadow: 0 0 10px rgba(232,179,57,.45), inset 0 0 8px rgba(232,179,57,.2); }
+  .va-ring.selectable { border: 2px dashed var(--va-green); box-shadow: 0 0 8px rgba(39,174,96,.3); }
+  .va-ring.raven { border: 1px solid var(--va-blue); box-shadow: 0 0 8px rgba(127,179,255,.32); background-image: repeating-conic-gradient(from 0deg, rgba(127,179,255,.25) 0deg 3deg, transparent 3deg 24deg); }
+  .va-book-page { background-image: repeating-linear-gradient(0deg, transparent 0 5px, rgba(138,115,76,.16) 5px 6px), linear-gradient(135deg,#e9d9b5,#d2bd93); border: 1px solid #a08a62; box-shadow: inset 0 1px 0 rgba(255,250,230,.6); }
+  .va-book-spine { background: linear-gradient(180deg,#8a734c,#5b4a30); }
+  .va-book-corner { border-radius: 50%; background: #3b3f4a; border: 1px solid var(--va-gold); color: var(--va-paper-ink); font-size: 9px; font-weight: 700; text-align: center; line-height: 13px; }
+  .va-potion-side { background: linear-gradient(90deg, rgba(255,255,255,.22), rgba(255,255,255,.04) 45%, rgba(255,255,255,.16)); border: 1px solid rgba(185,204,212,.55); }
+  .va-potion-cork { background: linear-gradient(180deg,#9a6a3f,#70492b); border-radius: 2px; }
+  .va-rune-slot { background: radial-gradient(circle at 50% 40%,#3a4a63,#232833); border: 2px solid #5b6472; box-shadow: 0 0 8px rgba(127,179,255,.4), inset 0 0 6px rgba(0,0,0,.5); border-radius: 50%; }
+  .va-rune-slot::before { content: ''; position: absolute; inset: 3px; border-radius: 50%; border: 1px dashed rgba(127,179,255,.45); }
+  .va-die-face { background-image: repeating-linear-gradient(8deg, transparent 0 6px, rgba(0,0,0,.08) 6px 8px), linear-gradient(135deg,#9a6a3f,#70492b); border: 1px solid #c49a68; box-shadow: inset 0 2px 0 rgba(255,225,180,.28); }
+  .va-pip { background: #43301e; border-radius: 50%; box-shadow: inset 0 1px 1px rgba(0,0,0,.6); }
+  .va-side-dark { background: linear-gradient(180deg,#3a4256,#202735); box-shadow: inset 0 1px 0 rgba(255,255,255,.12), inset 0 -2px 0 rgba(0,0,0,.3); }
+  .va-panel { background: repeating-linear-gradient(90deg, transparent 0 3px, rgba(120,90,50,.045) 3px 4px), linear-gradient(135deg,#2c303b,#1c202a); border: 1px solid #7a6c50; box-shadow: inset 0 1px 0 rgba(255,240,205,.08); }
+  .va-panel-title { background: linear-gradient(180deg, rgba(59,63,74,.95), rgba(43,48,58,.85)); border-bottom: 1px solid rgba(122,108,80,.7); color: var(--va-paper-ink); font-size: 11px; letter-spacing: .8px; }
+  .va-panel-line { background: linear-gradient(90deg, transparent, rgba(122,108,80,.7) 20%, rgba(122,108,80,.7) 80%, transparent); }
+
+  body.wire .side { outline: 1px solid rgba(168,208,255,.55); }
+  body.wire .va-tower-face, body.wire .cap { outline: 1px solid rgba(232,179,57,.6); }
+
+  @keyframes flick { 0%,100% { opacity:.82 } 45% { opacity:1 } 70% { opacity:.9 } }
+  @keyframes breathe { 0%,100% { opacity:.62; transform:scale(1) } 50% { opacity:.95; transform:scale(1.05) } }
+  @keyframes drift { 0%,100% { opacity:.25; transform:translateY(0) } 50% { opacity:.95; transform:translateY(-4px) } }
+  @media (prefers-reduced-motion: reduce) { .va-window,.va-levitate,.va-spark { animation:none } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Visual Asset Library v2 · Real CSS 3D</div>
+  <h1>巫师飞塔 · 真 3D 素材台</h1>
+  <p class="lede">不是等距插画：这里的每个元素都由多面 DOM 在浏览器里真实透视渲染，几何与项目舞台完全同源 —— <code>preserve-3d</code>、8/16 面侧墙 <code>rotateX(90deg)</code>、<code>translateZ</code> 分层、<code>perspective:1200px</code> / <code>rotateX(58deg)</code>，尺寸全部取自 <code>visual3d.ts</code>。拖动任意视口可绕场旋转，滑块可调俯角与缩放，开启面框能看见构成体块。</p>
+  <div class="tags">
+    <span class="tag key">真 3D · 非平面</span>
+    <span class="tag">980px 世界 / 58° 斜俯</span>
+    <span class="tag">8 面塔 · 16 面地块</span>
+    <span class="tag">零依赖 · 纯 CSS 3D</span>
+    <span class="tag">片段可直接搬用</span>
+  </div>
+</header>
+
+<div class="controls">
+  <label class="ctrl">俯角 <input id="pitch" type="range" min="34" max="72" value="58" /><b id="pitchV">58°</b></label>
+  <label class="ctrl">旋转 <input id="spin" type="range" min="-180" max="180" value="0" /><b id="spinV">0°</b></label>
+  <label class="ctrl">缩放 <input id="zoom" type="range" min="48" max="180" value="100" /><b id="zoomV">1.00×</b></label>
+  <button class="act" id="wire">面框</button>
+  <button class="act" id="reset">还原 58° / 0°</button>
+  <span class="hint">拖动视口 = 旋转 + 改俯角 · 滚轮 = 缩放 · 点「构造」看可搬用片段</span>
+</div>
+
+<h2>01 / 组合舞台</h2>
+<p class="sub">同一套 3D 世界里的真实装配：16 边形地块 → 升腾环 → 3 层塔堆 → 塔顶鸦堡与 6 名巫师。Z 轴分层与 <code>Space.tsx</code> 一致。</p>
+<div class="vp hero-vp" data-vp>
+  <div class="vp-label">真实场景装配 · tileSurfaceZ = 38</div>
+  <div class="world"><div class="anchor" id="hero"></div></div>
+</div>
+
+<h2>02 / 素材元素</h2>
+<p class="sub">A–F 六类，每项都是可独立旋转观察的真 3D 体块。卡片为便于观察统一放大 1.42×，几何尺寸不变。</p>
+<div class="grid" id="grid"></div>
+
+<h2>03 / 尺寸基线与技术栈对应</h2>
+<p class="sub">所有数字来自 <code>packages/client/src/game/visual3d.ts</code>；材质类与 <code>styles/visual-assets.css</code> 同源。</p>
+<div class="specs">
+  <div class="spec-card">
+    <h3>visual3d.ts 尺寸常量</h3>
+    <table>
+      <tr><td>世界 / 相机</td><td>980 · 1200px · 58°</td></tr>
+      <tr><td>棋盘底座</td><td>Ø920 · 高 28 · rim 34</td></tr>
+      <tr><td>地块（16 边）</td><td>Ø148 · 高 10 · 环半径 342</td></tr>
+      <tr><td>塔（8 边）</td><td>80 / 76 · 层高 44 · 9 层</td></tr>
+      <tr><td>鸦堡</td><td>48 × 48（≈塔顶 63%）</td></tr>
+      <tr><td>巫师</td><td>16 × 30 · 帽檐 Ø15</td></tr>
+      <tr><td>tileSurfaceZ</td><td>28 + 10 = 38</td></tr>
+      <tr><td>最高堆</td><td>9 × 44 = 396</td></tr>
+    </table>
+  </div>
+  <div class="spec-card">
+    <h3>统一 3D 构造</h3>
+    <p class="note"><b>顶面</b>：<code>clip-path</code> 多边形 + <code>translateZ(h)</code>。<br />
+    <b>侧墙</b>：N 片矩形，逐片 <code>translate3d(mx,my,h/2) rotateZ(θ) rotateX(90deg)</code>，θ 由相邻顶点 <code>atan2</code> 得出，<code>backface-visibility:hidden</code>。<br />
+    <b>竖向件</b>（巫师 / 卡牌 / 烛焰）：外层 <code>rotateX(-90deg)</code> 由世界 XY 面立到 XZ 面，内部再以 4 片 <code>rotateY(i·45°)</code> 交叉保证任意水平角都有体积。<br />
+    <b>锥顶</b>：7 层水平八边形圆盘逐层收小、Z 递增，在斜俯透视下是真锥体，不是竖直三角纸片。</p>
+  </div>
+  <div class="spec-card">
+    <h3>代码落点</h3>
+    <table>
+      <tr><td>尺寸 / 相机</td><td>game/visual3d.ts</td></tr>
+      <tr><td>塔 A01–A04</td><td>components/Tower3D.tsx</td></tr>
+      <tr><td>巫师 B01–B03</td><td>components/Wizard3D.tsx</td></tr>
+      <tr><td>鸦堡 A05</td><td>components/Castle3D.tsx</td></tr>
+      <tr><td>地块 / 装配 E01</td><td>components/Space.tsx</td></tr>
+      <tr><td>棋盘 / 16 环 E02</td><td>components/Board.tsx</td></tr>
+      <tr><td>相机 / 缩放</td><td>components/StageViewport.tsx</td></tr>
+      <tr><td>材质与配色</td><td>styles/visual-assets.css</td></tr>
+    </table>
+  </div>
+</div>
+
+<footer>
+  <span>2D 等距参考板：<b>3D-visual-board.html</b>（保留）　·　完整编号目录：<b>README.md</b></span>
+  <span>仅视觉素材，不改功能逻辑　|　2026-11-07</span>
+</footer>
+</div>
+
+<div class="drawer" id="drawer">
+  <div class="drawer-in">
+    <div class="drawer-head"><b id="dTitle">构造片段</b><span id="dSub"></span><button id="dClose">关闭</button></div>
+    <pre id="dBody"></pre>
+  </div>
+</div>
+
+<script>
+/* ============ 与 game/visual3d.ts 一一对应的尺寸常量 ============ */
+const V = {
+  boardRadius: 460, boardHeight: 28, boardRimDepth: 34,
+  tileRadius: 74, tileHeight: 10, tileRingRadius: 342,
+  towerBaseWidth: 80, towerTopWidth: 76, towerLayerHeight: 44, towerSideDepth: 7, maxTowerLayers: 9,
+  castleSize: 48, castleHeight: 48,
+  wizardRadius: 8, wizardHeight: 30, wizardHeadRadius: 4, wizardGridGap: 5,
+  cameraPitchDeg: 58, pitchMinDeg: 34, pitchMaxDeg: 72, perspective: 1200,
+  worldSize: 980
+};
+const tileSurfaceZ = V.boardHeight + V.tileHeight;
+const OCT = 'polygon(30% 0%,70% 0%,100% 30%,100% 70%,70% 100%,30% 100%,0% 70%,0% 30%)';
+
+function el(cls, css) {
+  const d = document.createElement('div');
+  if (cls) d.className = cls;
+  if (css) d.style.cssText = css;
+  return d;
+}
+function abs(w, h, z) {
+  return el('', `position:absolute;left:50%;top:50%;width:${w}px;height:${h}px;margin-left:${-w/2}px;margin-top:${-h/2}px;transform-style:preserve-3d;transform:translateZ(${z||0}px);`);
+}
+/* 与 Space.tsx / Tower3D.tsx 同一套多边形顶点算法 */
+function points(sides, r, start) {
+  return Array.from({length: sides}, (_, i) => {
+    const a = (start || 0) + (i / sides) * Math.PI * 2;
+    return { x: Math.cos(a) * r, y: Math.sin(a) * r };
+  });
+}
+function clipFrom(pts, boxR) {
+  return 'polygon(' + pts.map(p => ((p.x + boxR) / (boxR*2) * 100).toFixed(2) + '% ' + ((p.y + boxR) / (boxR*2) * 100).toFixed(2) + '%').join(', ') + ')';
+}
+/* 通用真实棱柱：顶面 + N 片竖立侧墙（rotateX(90deg)） */
+function prism(host, o) {
+  const sides = o.sides || 8, r = o.r, h = o.h, z = o.z || 0;
+  const start = o.start === undefined ? Math.PI/8 : o.start;
+  const pts = o.pts || points(sides, r, start);
+  const wrap = abs(r*2, r*2, z);
+  wrap.style.transform = `translateZ(${z}px) ${o.extra || ''}`;
+  host.appendChild(wrap);
+
+  if (o.topClass || o.topCss) {
+    const cap = el('cap ' + (o.topClass || ''), `position:absolute;left:50%;top:50%;width:${r*2}px;height:${r*2}px;margin-left:${-r}px;margin-top:${-r}px;clip-path:${o.clip || clipFrom(pts, r)};transform:translateZ(${h}px);${o.topCss || ''}`);
+    if (o.topHtml) cap.innerHTML = o.topHtml;
+    wrap.appendChild(cap);
+  }
+  if (o.bottomClass) {
+    const base = el('cap ' + o.bottomClass, `position:absolute;left:50%;top:50%;width:${r*2}px;height:${r*2}px;margin-left:${-r}px;margin-top:${-r}px;clip-path:${o.clip || clipFrom(pts,r)};transform:translateZ(0px);`);
+    wrap.appendChild(base);
+  }
+  for (let i = 0; i < sides; i++) {
+    const p = pts[i], q = pts[(i+1)%sides];
+    const edge = Math.hypot(q.x-p.x, q.y-p.y);
+    const mx = (p.x+q.x)/2, my = (p.y+q.y)/2;
+    const ang = Math.atan2(q.y-p.y, q.x-p.x);
+    const w = edge + 1;
+    const side = el('side ' + (o.sideClass || ''), `position:absolute;left:50%;top:50%;width:${w}px;height:${h}px;margin-left:${-w/2}px;margin-top:${-h/2}px;transform-origin:center center;backface-visibility:hidden;transform:translate3d(${mx}px,${my}px,${h/2}px) rotateZ(${ang}rad) rotateX(90deg);`);
+    if (o.sideVars) Object.entries(o.sideVars).forEach(([k, v]) => side.style.setProperty(k, v));
+    if (o.decorate) o.decorate(side, i);
+    wrap.appendChild(side);
+  }
+  return wrap;
+}
+
+/* ---------- A01 / A02 八边塔 ---------- */
+function tower(host, opts) {
+  const o = opts || {};
+  const raven = !!o.raven, z = o.z || 0, tier = o.tier || 0;
+  const r = V.towerBaseWidth/2, h = V.towerLayerHeight;
+  const brightness = 1 + Math.min(.08, tier * .016);
+  const w = prism(host, {
+    sides: 8, r, h, z, start: Math.PI/8,
+    sideClass: 'va-tower-side',
+    sideVars: { '--side-top': raven ? '#66728d' : '#6a7180', '--side-bottom': raven ? '#424c62' : '#4a5060' },
+    topClass: 'va-tower-face', topCss: `border:1px solid rgba(42,38,30,.55);`,
+    decorate: (side, i) => {
+      if (i === 0 || i === 4) {
+        const d = el('va-raven-bird', 'position:absolute;left:38%;top:32%;width:9px;height:7px;opacity:.55;');
+        side.appendChild(d);
+      }
+    }
+  });
+  /* A04 层间提亮只能作用于叶子面：filter 若设在 preserve-3d 容器上会把它
+     强制压成 flat，8 面侧墙随即全部塌陷成平面。 */
+  if (brightness !== 1) {
+    w.querySelectorAll('.side, .va-tower-face, .va-battlement').forEach(n => {
+      n.style.filter = `brightness(${brightness})`;
+    });
+  }
+  const cap = w.querySelector('.va-tower-face');
+  if (cap && raven) cap.setAttribute('data-variant','raven');
+  for (let i = 0; i < 8; i++) {
+    const a = Math.PI/8 + (i/8)*Math.PI*2;
+    const b = el('va-battlement', `position:absolute;left:50%;top:50%;width:8px;height:8px;margin-left:-4px;margin-top:-4px;transform:translate3d(${Math.cos(a)*30}px,${Math.sin(a)*30}px,${h+4}px);`);
+    if (raven) b.setAttribute('data-variant','raven');
+    w.appendChild(b);
+  }
+  if (raven) {
+    const badge = el('va-raven', `position:absolute;top:13px;right:13px;width:18px;height:18px;display:flex;align-items:center;justify-content:center;transform:translateZ(${h+6}px);`);
+    badge.appendChild(el('va-raven-bird','width:11px;height:8px;opacity:.9;'));
+    w.appendChild(badge);
+  }
+  if (o.inSlice) {
+    const cap2 = w.querySelector('.va-tower-face');
+    if (cap2) cap2.style.boxShadow = '0 0 12px rgba(232,179,57,.65), inset 0 2px 0 rgba(255,240,205,.5)';
+    w.style.transform += ' translateZ(7px)';
+  }
+  return w;
+}
+
+/* ---------- B01 尖帽巫师：4 片交叉袍身 + 4 片交叉帽锥 + 帽檐 ---------- */
+function wizard(host, color, x, y, z, highlight) {
+  const w = V.wizardRadius*2, h = V.wizardHeight, hatH = h*.4, robeH = h-hatH;
+  const mount = abs(w, h, z);
+  mount.style.transform = `translate3d(${x||0}px,${y||0}px,${z}px) rotateX(-90deg)`;
+  mount.style.setProperty('--robe', color);
+  mount.style.setProperty('--hat', color);
+  host.appendChild(mount);
+  const shadow = el('', `position:absolute;left:-3px;right:-3px;bottom:-2px;height:6px;border-radius:50%;background:radial-gradient(ellipse at 50% 50%, ${highlight?'rgba(232,179,57,.55)':'rgba(0,0,0,.45)'} 0%, transparent 72%);${highlight?'border:1px solid rgba(232,179,57,.85)':''}`);
+  mount.appendChild(shadow);
+  for (let i=0;i<4;i++) {
+    const robe = el('va-wizard-robe', `position:absolute;left:0;bottom:0;width:${w}px;height:${robeH}px;transform-origin:50% 100%;transform:rotateY(${i*45}deg);backface-visibility:hidden;`);
+    robe.appendChild(el('va-wizard-face','position:absolute;left:50%;top:18%;width:7px;height:8px;margin-left:-3.5px;'));
+    mount.appendChild(robe);
+  }
+  for (let i=0;i<4;i++) mount.appendChild(el('va-wizard-hat', `position:absolute;left:1px;top:0;width:${w-2}px;height:${hatH+3}px;transform-origin:50% 100%;transform:rotateY(${i*45}deg);backface-visibility:hidden;`));
+  mount.appendChild(el('va-wizard-brim', `position:absolute;left:50%;top:${hatH-1}px;width:${w-1}px;height:${w-1}px;margin-left:${-(w-1)/2}px;margin-top:${-(w-1)/4}px;`));
+  return mount;
+}
+
+/* ---------- A05 鸦堡：八边柱 + 7 层收缩圆盘锥顶 ---------- */
+function castle(host, z) {
+  const size = V.castleSize, r = size/2, bodyH = V.castleHeight*.54, roofH = V.castleHeight-bodyH;
+  const w = prism(host, {
+    sides: 8, r, h: bodyH, z: z||0, start: Math.PI/8,
+    sideClass: 'va-castle-side',
+    topClass: '', topCss: 'background:linear-gradient(135deg,#5c6379,#3b4158 62%,#2b3042);box-shadow:inset 0 2px 0 rgba(255,255,255,.18);',
+    decorate: (side, i) => {
+      if (i % 2 === 0) side.appendChild(el('va-window','position:absolute;left:38%;top:24%;width:7px;height:9px;'));
+      if (i === 0 || i === 4) side.appendChild(el('va-door','position:absolute;left:36%;bottom:0;width:28%;height:38%;'));
+    }
+  });
+  const holder = abs(size, size, 0);
+  holder.style.transform = `translateZ(${z||0}px)`;
+  host.appendChild(holder);
+  for (let i=0;i<7;i++) {
+    const k = 1 - i/7, sw = size*.94*k;
+    holder.appendChild(el('va-roof cap', `position:absolute;left:50%;top:50%;width:${sw}px;height:${sw}px;margin-left:${-sw/2}px;margin-top:${-sw/2}px;clip-path:${OCT};filter:brightness(${0.82+i*0.045});transform:translateZ(${bodyH + (i+1)*roofH/7}px);`));
+  }
+  holder.appendChild(el('', `position:absolute;left:50%;top:50%;width:2px;height:12px;margin-left:-1px;margin-top:-12px;background:linear-gradient(180deg,#d9c9a3,#7a6c50);transform-origin:50% 100%;transform:translateZ(${bodyH+roofH}px) rotateX(90deg);`));
+  holder.appendChild(el('', `position:absolute;left:50%;top:50%;width:9px;height:6px;margin-left:1px;margin-top:-17px;background:linear-gradient(90deg,#7a2436,#4a1c2b);clip-path:polygon(0% 0%,100% 30%,0% 100%);transform:translateZ(${bodyH+roofH+6}px) rotateX(90deg);`));
+  return w;
+}
+
+/* ---------- E01 十六边形地块 ---------- */
+function tile(host, opts) {
+  const o = opts || {};
+  const r = V.tileRadius, polyR = r*.92, h = V.tileHeight, z = o.z || 0;
+  const pts = points(16, polyR, 0);
+  return prism(host, {
+    sides: 16, r, h, z, start: 0, pts,
+    sideClass: 'va-tile-side',
+    topClass: 'va-tile-face', clip: clipFrom(pts, r),
+    decorate: (side, i) => {}
+  });
+}
+
+/* ---------- A06 升腾魔力基座 ---------- */
+function levitate(host, z) {
+  const d = 104;
+  const wrap = abs(d, d, z||0);
+  host.appendChild(wrap);
+  wrap.appendChild(el('va-levitate-shadow','position:absolute;inset:0;'));
+  wrap.appendChild(el('va-levitate','position:absolute;inset:0;'));
+  const sparks = [[12,26,2,0],[78,64,2,'ruby'],[48,86,1.5,'']];
+  sparks.forEach(([x,y,s,tone],i) => {
+    const sp = el('va-spark', `position:absolute;left:${x}px;top:${y}px;width:${s}px;height:${s}px;animation-delay:${i*.9}s;transform:translateZ(${6+i*5}px);`);
+    if (tone) sp.setAttribute('data-tone',tone);
+    wrap.appendChild(sp);
+  });
+  return wrap;
+}
+
+/* ---------- C04 烛焰（竖立） ---------- */
+function flame(host, x, y, z) {
+  const m = abs(9, 13, z);
+  m.style.transform = `translate3d(${x}px,${y}px,${z}px) rotateX(-90deg)`;
+  host.appendChild(m);
+  m.appendChild(el('va-flame','position:absolute;left:1px;bottom:2px;width:7px;height:11px;'));
+  m.appendChild(el('va-flame-holder','position:absolute;bottom:-1px;left:0;width:9px;height:3px;'));
+  return m;
+}
+
+/* ---------- C01 渡鸦圆徽 / C05 三态环 ---------- */
+function disc(host, o) {
+  const r = o.r, h = o.h || 3, z = o.z || 0, x = o.x || 0, y = o.y || 0;
+  const pts = points(16, r, 0);
+  const wrap = prism(host, {
+    sides: 16, r, h, z, start: 0, pts,
+    sideClass: o.sideClass || 'va-side-dark', topClass: o.cls || '', clip: clipFrom(pts, r),
+    topCss: o.topCss || ''
+  });
+  wrap.style.transform = `translate3d(${x}px,${y}px,${z}px)`;
+  return wrap;
+}
+
+/* ---------- D02 药水瓶（8 边圆柱 + 液面圆盘） ---------- */
+function potion(host, o) {
+  const r = 9, h = 22, x = o.x, y = o.y, state = o.state, color = o.color || '#3498db';
+  const body = prism(host, {
+    sides: 10, r, h, z: 0, start: Math.PI/10,
+    sideClass: 'va-potion-side', topClass: '', topCss: 'background:rgba(143,160,168,.45);'
+  });
+  body.style.transform = `translate3d(${x}px,${y}px,0)`;
+  const liquidH = state === 'FULL' ? 15 : state === 'EMPTY' ? 4 : 0;
+  if (liquidH > 0) {
+    const lq = el('', `position:absolute;left:50%;top:50%;width:${r*2-3}px;height:${r*2-3}px;margin-left:${-(r*2-3)/2}px;margin-top:${-(r*2-3)/2}px;border-radius:50%;background:${state==='FULL'?color:'rgba(154,168,174,.5)'};box-shadow:0 0 9px ${state==='FULL'?color:'transparent'};transform:translateZ(${liquidH}px);`);
+    body.appendChild(lq);
+  }
+  const neck = prism(body, { sides: 8, r: 4, h: 5, z: h, start: Math.PI/8, sideClass:'va-potion-side', topClass:'', topCss:'background:rgba(143,160,168,.55);' });
+  const cork = el('va-potion-cork', `position:absolute;left:50%;top:50%;width:9px;height:4px;margin-left:-4.5px;margin-top:-2px;transform:translateZ(${h+6}px) ${state==='SPENT'?'rotateZ(-18deg)':''};`);
+  body.appendChild(cork);
+  if (state === 'SPENT') body.style.opacity = '.6';
+  return body;
+}
+
+/* ---------- D04 木质六面骰（真立方体） ---------- */
+function die(host, x, y, z) {
+  const s = 24, half = s/2;
+  const cube = abs(s, s, z);
+  cube.style.transform = `translate3d(${x}px,${y}px,${z}px)`;
+  host.appendChild(cube);
+  const faces = [
+    ['translateZ('+half+'px)',5], ['rotateY(180deg) translateZ('+half+'px)',2],
+    ['rotateY(90deg) translateZ('+half+'px)',3], ['rotateY(-90deg) translateZ('+half+'px)',4],
+    ['rotateX(90deg) translateZ('+half+'px)',1], ['rotateX(-90deg) translateZ('+half+'px)',6]
+  ];
+  const pipPos = {1:[[50,50]],2:[[26,26],[74,74]],3:[[26,26],[50,50],[74,74]],4:[[26,26],[74,26],[26,74],[74,74]],5:[[26,26],[74,26],[50,50],[26,74],[74,74]],6:[[26,26],[74,26],[26,50],[74,50],[26,74],[74,74]]};
+  faces.forEach(([tr,n]) => {
+    const f = el('va-die-face', `position:absolute;inset:0;transform:${tr};backface-visibility:hidden;`);
+    pipPos[n].forEach(([px,py]) => f.appendChild(el('va-pip', `position:absolute;left:${px}%;top:${py}%;width:3px;height:3px;margin-left:-1.5px;margin-top:-1.5px;`)));
+    cube.appendChild(f);
+  });
+  return cube;
+}
+
+/* ---------- D01 打开的书卡（带厚度） ---------- */
+function bookCard(host, o) {
+  const w = 62, h = 84, thick = 6, x = o.x||0, y = o.y||0, z = o.z||0;
+  const wrap = abs(w, h, z);
+  wrap.style.transform = `translate3d(${x}px,${y}px,${z}px) rotateZ(${o.rot||0}deg)`;
+  host.appendChild(wrap);
+  const rectPts = [{x:-w/2,y:-h/2},{x:w/2,y:-h/2},{x:w/2,y:h/2},{x:-w/2,y:h/2}];
+  rectPts.forEach((p,i) => {
+    const q = rectPts[(i+1)%4];
+    const edge = Math.hypot(q.x-p.x, q.y-p.y);
+    const mx=(p.x+q.x)/2, my=(p.y+q.y)/2, ang=Math.atan2(q.y-p.y,q.x-p.x);
+    wrap.appendChild(el('side va-book-page', `position:absolute;left:50%;top:50%;width:${edge+1}px;height:${thick}px;margin-left:${-(edge+1)/2}px;margin-top:${-thick/2}px;transform-origin:center center;backface-visibility:hidden;transform:translate3d(${mx}px,${my}px,${thick/2}px) rotateZ(${ang}rad) rotateX(90deg);`));
+  });
+  const face = el('va-book-page', `position:absolute;left:0;top:0;width:${w}px;height:${h}px;border-radius:3px;transform:translateZ(${thick}px);`);
+  face.appendChild(el('va-book-spine','position:absolute;left:50%;top:2px;bottom:2px;width:2px;margin-left:-1px;'));
+  face.appendChild(el('', `position:absolute;left:8px;top:26px;width:14px;height:17px;background:linear-gradient(180deg,#5c6270,#3b3f4a);clip-path:polygon(20% 0%,80% 0%,100% 22%,100% 100%,0% 100%,0% 22%);`));
+  face.appendChild(el('', `position:absolute;right:10px;top:26px;width:12px;height:17px;background:#7a2436;clip-path:polygon(50% 0%,72% 42%,66% 100%,34% 100%,28% 42%);`));
+  [['3','left:2px'],['2','right:2px']].forEach(([n,pos]) => face.appendChild(el('va-book-corner', `position:absolute;top:2px;${pos};width:13px;height:13px;`)).appendChild(document.createTextNode(n)));
+  wrap.appendChild(face);
+  return wrap;
+}
+
+/* ---------- F02 卷轴面板（带厚度） ---------- */
+function panel(host, x, y, z) {
+  const w = 104, h = 66, thick = 5;
+  const wrap = abs(w, h, z);
+  wrap.style.transform = `translate3d(${x}px,${y}px,${z}px)`;
+  host.appendChild(wrap);
+  const rectPts = [{x:-w/2,y:-h/2},{x:w/2,y:-h/2},{x:w/2,y:h/2},{x:-w/2,y:h/2}];
+  rectPts.forEach((p,i) => {
+    const q=rectPts[(i+1)%4], edge=Math.hypot(q.x-p.x,q.y-p.y);
+    const mx=(p.x+q.x)/2,my=(p.y+q.y)/2,ang=Math.atan2(q.y-p.y,q.x-p.x);
+    wrap.appendChild(el('side va-panel', `position:absolute;left:50%;top:50%;width:${edge+1}px;height:${thick}px;margin-left:${-(edge+1)/2}px;margin-top:${-thick/2}px;transform-origin:center center;backface-visibility:hidden;transform:translate3d(${mx}px,${my}px,${thick/2}px) rotateZ(${ang}rad) rotateX(90deg);`));
+  });
+  const face = el('va-panel', `position:absolute;left:0;top:0;width:${w}px;height:${h}px;border-radius:6px;transform:translateZ(${thick}px);`);
+  const title = el('va-panel-title','position:absolute;left:-1px;right:-1px;top:-1px;padding:4px 9px;border-radius:6px 6px 0 0;');
+  title.textContent = '卷轴面板';
+  face.appendChild(title);
+  face.appendChild(el('va-panel-line','position:absolute;left:10px;right:10px;top:28px;height:1px;'));
+  face.appendChild(el('', `position:absolute;left:10px;top:36px;width:62px;height:4px;border-radius:2px;background:rgba(217,201,163,.45);`));
+  face.appendChild(el('', `position:absolute;left:10px;top:45px;width:44px;height:4px;border-radius:2px;background:rgba(217,201,163,.3);`));
+  wrap.appendChild(face);
+  return wrap;
+}
+
+/* ============ 素材清单 ============ */
+const SNIP = {
+  tower: `// 与 Tower3D.tsx 同构：8 面侧墙 + 顶面 + 8 城垛
+const pts = points(8, 40, Math.PI/8);
+side.style.transform =
+  'translate3d(mx,my,' + (44/2) + 'px) rotateZ(atan2(dy,dx)rad) rotateX(90deg)';
+cap.style.transform  = 'translateZ(44px)';
+// clip-path 由同一组 pts 生成，顶面/侧面不错位
+// 材质：.va-tower-side / .va-tower-face / .va-battlement`,
+  tile: `// 与 Space.tsx 同构：16 边形，边法线 22.5° 与 16 环邻居对齐
+const pts = points(16, 74*0.92, 0);   // r=68 ≈ R·tan(π/16)
+clip-path = clipFrom(pts, 74);        // 盒子 Ø148
+side: translate3d(mx,my, 28+10/2) rotateZ(θ) rotateX(90deg)
+face: translateZ(tileSurfaceZ=38)
+// 材质：.va-tile-face / .va-tile-side`,
+  wizard: `// 与 Wizard3D.tsx + WizardCluster 同构
+mount: translate3d(x,y, z + 30/2) rotateX(-90deg)
+4 × robe: rotateY(i*45deg)      // 任意水平角都有体积
+4 × hat : rotateY(i*45deg)
+brim   : 水平圆盘 Ø15，压住帽/袍接缝
+// 材质：.va-wizard-robe / -hat / -brim / -face`,
+  castle: `// 与 Castle3D.tsx 同构：八边柱 + 7 层收缩水平圆盘 = 真锥顶
+body  : prism(8, 24, 26)
+roof  : for i=0..6  w = 48*0.94*(1-i/7)
+        translateZ(26 + (i+1)*22/7)
+// 不是竖立三角纸片；旋转舞台仍是锥体
+// 材质：.va-castle-side / .va-window / .va-door / .va-roof`,
+  levitate: `// 与 Space.tsx A06 同构：世界平面里是正圆 Ø104
+// 经 58° rotateX 自然投影成椭圆，不做 2D 椭圆贴片
+ring: translateZ(tileSurfaceZ + 2)
+// 材质：.va-levitate / .va-levitate-shadow / .va-spark`,
+  prism: `// 通用棱柱（本素材台 prism() 与项目侧墙算法同源）
+function prism(host,{sides,r,h,z,start}) {
+  const pts = points(sides, r, start);
+  cap  = clipFrom(pts, r) + ' translateZ(h)';
+  side = 'translate3d(mx,my,h/2) rotateZ(θ) rotateX(90deg)';
+  // θ = atan2(next.y-p.y, next.x-p.x)
+  // backface-visibility:hidden
+}`,
+  book: `// 带厚度的实体卡：4 片侧墙 + 正面
+side: translate3d(mx,my, 6/2) rotateZ(θ) rotateX(90deg)
+face: translateZ(6px)  // .va-book-page / -spine / -corner`,
+  potion: `// 10 边圆柱瓶 + 液面圆盘 + 8 边瓶颈 + 木塞
+body  : prism(10, 9, 22)
+liquid: translateZ(15 / 4 / 0)   // FULL / EMPTY / SPENT
+neck  : prism(8, 4, 5, z=22)
+// 材质：.va-potion-side / .va-potion-cork`,
+  die: `// 真立方体 6 面（非贴图）
+front translateZ(12) / back rotateY(180) translateZ(12)
+right rotateY(90) translateZ(12) / left rotateY(-90) translateZ(12)
+top   rotateX(90) translateZ(12) / bottom rotateX(-90) translateZ(12)
+// 每面 .va-pip 点阵`,
+  general: `// 统一相机链（StageViewport.tsx）
+.wt-stage-viewport { perspective:1200px; perspective-origin:50% 40% }
+.wt-stage-world {
+  transform-style: preserve-3d;
+  transform: scale(zoom) rotateX(58deg) rotateZ(rotation);
+}
+// 所有子元素 transform-style: preserve-3d; 禁止 flatten`
+};
+
+const ASSETS = [
+  { id:'A01', name:'石棱台塔身', cls:'A 塔体与建筑', use:'普通塔 T02/04/06/08', geom:'8 面侧墙 · 8 城垛', size:'80 / 44', snip:'tower',
+    desc:'八边形矮胖锥台，粗凿石砖缝、平顶城垛，暖灰石哑光。',
+    build: h => tower(h) },
+  { id:'A02 / C01', name:'渡鸦纹章塔', cls:'A 塔体与建筑', use:'纹章塔 T01/03/05/07/09', geom:'8 面侧墙 · Z+50 圆徽', size:'80 / 44', snip:'tower',
+    desc:'蓝灰石身，顶面右上角嵌蓝色径向圆盾与乌鸦剪影，随塔移动。',
+    build: h => tower(h, {raven:true}) },
+  { id:'A04', name:'九层塔堆', cls:'A 塔体与建筑', use:'2–9 层堆叠 / 切片', geom:'9 × translateZ(i·44)', size:'总高 396', snip:'tower', scale:.34, anchorTop:'74%',
+    desc:'逐层微增亮、层间 2px 暗缝；层级靠真实 Z 位移，不是画出来的叠影。',
+    build: h => { for(let i=0;i<9;i++) tower(h, {z: i*V.towerLayerHeight, tier:i, raven: i%2===0}); } },
+  { id:'A03 / A05', name:'塔顶平台 · 鸦堡 · 6 巫师', cls:'A 塔体与建筑', use:'塔顶 / 城堡落点', geom:'塔 + 48 堡 + 6 立件', size:'76 / 48 / 30', snip:'castle',
+    desc:'塔顶留出 3×2 巫师位；鸦堡八边柱 + 7 层收缩圆盘锥顶，居中不遮挡。',
+    build: h => {
+      tower(h, {z:0});
+      castle(h, V.towerLayerHeight);
+      const cols = ['#e74c3c','#3498db','#27ae60','#f1c40f','#9b59b6','#e67e22'];
+      cols.forEach((c,i) => { const a = i*Math.PI/3 - Math.PI/2; wizard(h, c, Math.cos(a)*30, Math.sin(a)*30, V.towerLayerHeight + V.wizardHeight/2, i===0); });
+    } },
+  { id:'B01 / B02', name:'尖帽巫师米宝（六色）', cls:'B 角色与棋子', use:'全场棋子 / 选中高亮', geom:'4 片交叉袍身 + 帽锥', size:'16 × 30', snip:'wizard',
+    desc:'绕竖轴 4 片交叉保证任意水平角都有体积；无脸暗面，木质哑光。',
+    build: h => { const cols=['#e74c3c','#3498db','#27ae60','#f1c40f','#9b59b6','#e67e22']; cols.forEach((c,i)=>wizard(h,c,(i-2.5)*20, (i%2?12:-12), 18, i===2)); } },
+  { id:'A06 / C03 / C04', name:'升腾基座 · 星屑 · 烛焰', cls:'C 魔法符号与光效', use:'塔移动 / 容量标记', geom:'Ø104 水平环 + 立件', size:'104 / 13', snip:'levitate',
+    desc:'世界平面里的正圆经 58° 透视自然成椭圆；星屑分布在不同 Z，火苗竖立。',
+    build: h => { levitate(h, 4); flame(h,-34,0,10); flame(h,34,0,10); } },
+  { id:'C01 / C05', name:'渡鸦圆徽 · 三态状态环', cls:'C 魔法符号与光效', use:'地面纹章 / 目标 / 可选', geom:'16 边圆盘 + 厚度', size:'Ø22 / Ø36', snip:'prism',
+    desc:'金实环 / 绿虚线 / 蓝符文，语义固定；圆盘带真实侧壁厚度。',
+    build: h => {
+      disc(h,{r:11,h:4,x:-52,y:-20,cls:'va-raven',sideClass:'va-raven',topCss:'border-radius:50%;'});
+      disc(h,{r:18,h:3,x:12,y:-24,cls:'va-ring target',topCss:'border-radius:50%;'});
+      disc(h,{r:18,h:3,x:12,y:20,cls:'va-ring selectable',topCss:'border-radius:50%;'});
+      disc(h,{r:18,h:3,x:56,y:20,cls:'va-ring raven',topCss:'border-radius:50%;'});
+    } },
+  { id:'D01', name:'实体移动卡（打开的书）', cls:'D 道具与卡面', use:'手牌区', geom:'4 片侧墙 + 顶面', size:'62 × 84 × 6', snip:'book',
+    desc:'羊皮纸双页、中缝书脊、左右角标步数，6px 真实厚度可旋转看到侧面。',
+    build: h => { bookCard(h,{x:-34,rot:-6}); bookCard(h,{x:34,rot:5}); } },
+  { id:'D02', name:'药水瓶三态', cls:'D 道具与卡面', use:'药水区（仅当前玩家）', geom:'10 边圆柱 + 液面圆盘', size:'Ø18 × 22', snip:'potion',
+    desc:'空 / 满 / 已用的液面高度是真实 Z 位移，瓶塞角度与饱和度区分状态。',
+    build: h => { potion(h,{x:-34,y:0,state:'EMPTY'}); potion(h,{x:0,y:0,state:'FULL'}); potion(h,{x:34,y:0,state:'SPENT'}); } },
+  { id:'D03 / D04', name:'法术符文槽 · 木质六面骰', cls:'D 道具与卡面', use:'法术区 / 随机步数', geom:'16 边圆盘 + 6 面立方体', size:'Ø44 / 24³', snip:'die',
+    desc:'圆盘石槽带侧壁厚度；骰子是 6 个独立面的真立方体，可见点阵。',
+    build: h => {
+      disc(h,{r:22,h:6,x:-24,cls:'va-rune-slot',topCss:'border-radius:50%;'});
+      const bird=el('',`position:absolute;left:50%;top:50%;width:9px;height:5px;margin-left:-14px;margin-top:-10px;background:#c9d6e6;clip-path:polygon(0% 60%,40% 0%,60% 40%,100% 0%,70% 100%,30% 60%);transform:translate3d(-24px,0,12px);`);
+      h.appendChild(bird); die(h,32,0,14);
+    } },
+  { id:'E01 / E02', name:'十六边形地块 · 悬浮棋盘', cls:'E 场景与材质', use:'16 空间格 / 舞台底层', geom:'16 面侧墙 · Ø920 底座', size:'Ø148 / Ø920', snip:'tile', scale:.9,
+    desc:'地块 16 面侧墙高 10，顶面与侧面共用同一组顶点；棋盘底座为独立 Z 层。',
+    build: h => {
+      const b=abs(V.boardRadius*2, V.boardRadius*2, 0); b.style.transform='scale(.22) translateZ(0)'; h.appendChild(b);
+      b.appendChild(el('va-board-base','position:absolute;inset:0;'));
+      b.appendChild(el('va-board-rim',`position:absolute;left:50%;top:50%;width:${V.boardRadius*2}px;height:${V.boardRimDepth}px;margin-left:${-V.boardRadius}px;margin-top:${-V.boardRimDepth/2}px;transform:translateZ(${V.boardHeight/2}px);opacity:.85;`));
+      tile(h,{z:V.boardHeight});
+      const ring=el('va-ring raven',`position:absolute;left:50%;top:50%;width:120px;height:120px;margin-left:-60px;margin-top:-60px;transform:translateZ(${tileSurfaceZ+2}px);`);
+      h.appendChild(ring);
+    } },
+  { id:'F01 / F02 / F03', name:'卷轴面板 · 石雕角饰', cls:'F 界面装饰', use:'右侧栏四区 / 浮层', geom:'4 片侧墙 + 正面', size:'104 × 66 × 5', snip:'general',
+    desc:'藏宝图式纸质底板带真实厚度、石雕四角与细石分割线，整体沿用哑光石材。',
+    build: h => { panel(h,0,0,0); const glow=el('',`position:absolute;left:50%;top:50%;width:150px;height:110px;margin-left:-75px;margin-top:-55px;border:2px solid rgba(231,76,60,.45);border-radius:10px;box-shadow:0 0 18px rgba(231,76,60,.25),inset 0 0 18px rgba(231,76,60,.18);transform:translateZ(-4px);`); h.appendChild(glow); } }
+];
+
+/* ============ 组合舞台装配 ============ */
+(function buildHero(){
+  const h = document.getElementById('hero');
+  const base = abs(V.boardRadius*2, V.boardRadius*2, 0);
+  base.style.transform = 'scale(.30) translateZ(0)';
+  base.appendChild(el('va-board-base','position:absolute;inset:0;'));
+  h.appendChild(base);
+  tile(h, {z: V.boardHeight});
+  levitate(h, tileSurfaceZ + 2);
+  tower(h, {z: tileSurfaceZ, tier:0});
+  tower(h, {z: tileSurfaceZ + 44, tier:1, raven:true});
+  tower(h, {z: tileSurfaceZ + 88, tier:2, inSlice:true});
+  castle(h, tileSurfaceZ + 132);
+  const cols=['#e74c3c','#3498db','#27ae60','#f1c40f','#9b59b6','#e67e22'];
+  cols.forEach((c,i)=>{ const a=i*Math.PI/3 - Math.PI/2; wizard(h,c,Math.cos(a)*52,Math.sin(a)*52, tileSurfaceZ + 132 + V.wizardHeight/2, i===0); });
+  flame(h,-62,40,tileSurfaceZ+6); flame(h,62,-40,tileSurfaceZ+6);
+})();
+
+/* ============ 渲染卡片 ============ */
+const grid = document.getElementById('grid');
+ASSETS.forEach(a => {
+  const item = el('item');
+  item.innerHTML = `<div class="vp" data-vp><div class="world"><div class="anchor"></div></div></div>
+    <div class="meta">
+      <div class="code">${a.id} · ${a.cls}</div>
+      <div class="name">${a.name}</div>
+      <div class="desc">${a.desc}</div>
+      <div class="specline">${a.geom}　|　${a.size}</div>
+      <div class="row"><span class="geom">${a.geom}</span><span class="use">${a.use}</span><button class="snip-btn">构造</button></div>
+    </div>`;
+  grid.appendChild(item);
+  const anchor = item.querySelector('.anchor');
+  if (a.scale) anchor.style.transform = `scale(${a.scale})`;
+  if (a.anchorTop) anchor.style.top = a.anchorTop;
+  a.build(anchor);
+  item.querySelector('.snip-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    document.getElementById('dTitle').textContent = a.id + ' · ' + a.name;
+    document.getElementById('dSub').textContent = a.geom + '　|　' + a.size + '　|　与项目同构，可直接搬用';
+    document.getElementById('dBody').textContent = SNIP[a.snip] + '\n\n' + SNIP.general;
+    document.getElementById('drawer').classList.add('open');
+  });
+});
+
+/* ============ 交互：与 StageViewport 相同的 pitch / rotation / zoom ============ */
+const root = document.documentElement;
+const pitchEl = document.getElementById('pitch'), spinEl = document.getElementById('spin'), zoomEl = document.getElementById('zoom');
+let pitch = 58, spin = 0, zoom = 1;
+function apply() {
+  root.style.setProperty('--pitch', pitch + 'deg');
+  root.style.setProperty('--spin', spin + 'deg');
+  root.style.setProperty('--zoom', zoom);
+  pitchEl.value = Math.round(pitch); spinEl.value = Math.round(spin); zoomEl.value = Math.round(zoom*100);
+  document.getElementById('pitchV').textContent = Math.round(pitch) + '°';
+  document.getElementById('spinV').textContent = Math.round(spin) + '°';
+  document.getElementById('zoomV').textContent = zoom.toFixed(2) + '×';
+}
+pitchEl.addEventListener('input', e => { pitch = +e.target.value; apply(); });
+spinEl.addEventListener('input', e => { spin = +e.target.value; apply(); });
+zoomEl.addEventListener('input', e => { zoom = +e.target.value/100; apply(); });
+document.getElementById('reset').addEventListener('click', () => { pitch=58; spin=0; zoom=1; apply(); });
+document.getElementById('wire').addEventListener('click', e => {
+  document.body.classList.toggle('wire');
+  e.target.classList.toggle('on');
+});
+document.getElementById('dClose').addEventListener('click', () => document.getElementById('drawer').classList.remove('open'));
+
+let drag = null;
+document.querySelectorAll('[data-vp]').forEach(vp => {
+  vp.addEventListener('pointerdown', e => {
+    if (e.target.closest('button')) return;
+    drag = { x:e.clientX, y:e.clientY, spin, pitch };
+    vp.classList.add('drag'); vp.setPointerCapture(e.pointerId);
+  });
+  vp.addEventListener('pointermove', e => {
+    if (!drag) return;
+    spin = drag.spin - (e.clientX - drag.x) * .45;
+    pitch = Math.max(V.pitchMinDeg, Math.min(V.pitchMaxDeg, drag.pitch - (e.clientY - drag.y) * .25));
+    apply();
+  });
+  const end = () => { drag = null; vp.classList.remove('drag'); };
+  vp.addEventListener('pointerup', end); vp.addEventListener('pointercancel', end);
+  vp.addEventListener('wheel', e => {
+    e.preventDefault();
+    zoom = Math.max(.48, Math.min(V.zoomMax, zoom * (e.deltaY < 0 ? 1.1 : 1/1.1)));
+    apply();
+  }, { passive:false });
+});
+apply();
+</script>
+</body>
+</html>

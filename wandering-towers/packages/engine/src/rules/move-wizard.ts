@@ -11,6 +11,7 @@ import { RuleErrorCode, WizardStateType, VISIBLE_WIZARD_CAPACITY_PER_SPACE } fro
 import { RuleError } from '../rule-error';
 import {
   clockwiseSpace,
+  countPotions,
   isRavenShieldPosition,
   ravenCastleSpaceIndex,
   topTowerAt,
@@ -91,6 +92,22 @@ export function moveWizardExact(
 
   // 4. 若落点恰好是乌鸦城堡 -> 进堡
   if (destSpace === castleSpace) {
+    // 进堡前置条件（规则口径）：该玩家只剩最后 1 名未进堡巫师时，
+    // 必须已无 EMPTY 药水瓶才允许进堡。因此「所有巫师进堡」发生时空瓶条件
+    // 必然同时满足，终局双条件一次性达成 —— 不存在「巫师全进堡但还有空瓶」
+    // 的状态，也不需要任何额外的补瓶动作。违规时直接拦截，由 UI 即时提示。
+    const ownerId = wizard.ownerPlayerId;
+    const otherWizardsOutside = Object.values(state.wizards).filter(
+      (w) => w.ownerPlayerId === ownerId && w.id !== wizardId && w.state.mode !== WizardStateType.IN_CASTLE,
+    ).length;
+    const emptyPotions = countPotions(state, ownerId, 'EMPTY');
+    if (otherWizardsOutside === 0 && emptyPotions > 0) {
+      throw new RuleError(
+        RuleErrorCode.LAST_WIZARD_NEEDS_NO_EMPTY_POTION,
+        `进堡条件未满足：还有 ${emptyPotions} 个空药水瓶，最后一名巫师进鸦堡前必须先把空瓶装满，本次移动已取消`,
+      );
+    }
+
     const toState: WizardState = { mode: WizardStateType.IN_CASTLE };
     emit('WIZARD_MOVED', {
       wizardId,

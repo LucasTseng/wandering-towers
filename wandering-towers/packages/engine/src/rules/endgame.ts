@@ -26,6 +26,10 @@ export function satisfiesEndgame(state: GameState, playerId: PlayerID): boolean 
 /**
  * 检查并触发终局（V4 §14.10）。
  * 仅当该玩家满足条件且终局尚未触发时，emit ENDGAME_TRIGGERED 并返回 true。
+ *
+ * 注意：调用方必须保证**本命令产生的事件已 applyEvents 到 state**，
+ * 否则 `satisfiesEndgame` 读到的是变更前的旧状态（进堡/填瓶都只 emit 事件）。
+ * 引擎统一入口请用下面的 `checkEndgameTriggerForAnyPlayer`。
  */
 export function checkEndgameTrigger(
   state: GameState,
@@ -33,13 +37,33 @@ export function checkEndgameTrigger(
   emit: (type: GameEvent['type'], payload: unknown) => GameEvent,
 ): boolean {
   if (state.endgameTriggered) {
-    return true; // 已触发，不重复
+    return false; // 已触发，不重复
   }
   if (!satisfiesEndgame(state, playerId)) {
     return false;
   }
   emit('ENDGAME_TRIGGERED', { playerId, roundNumber: state.roundNumber });
   return true;
+}
+
+/**
+ * 引擎层统一终局检查（V2 §34「当某位玩家首次满足终局条件时」）。
+ *
+ * 在 applyEvents 之后对**所有玩家**检查，覆盖所有状态变化路径：
+ * 巫师进堡、封印奖励把最后一个空瓶翻满、施法消耗、显式 END_TURN 等。
+ * 只要有人首次满足即 emit 一次 ENDGAME_TRIGGERED。
+ */
+export function checkEndgameTriggerForAnyPlayer(
+  state: GameState,
+  emit: (type: GameEvent['type'], payload: unknown) => GameEvent,
+): boolean {
+  if (state.endgameTriggered) return false;
+  for (const playerId of Object.keys(state.players) as PlayerID[]) {
+    if (!satisfiesEndgame(state, playerId)) continue;
+    emit('ENDGAME_TRIGGERED', { playerId, roundNumber: state.roundNumber });
+    return true;
+  }
+  return false;
 }
 
 export interface FinalWinnersResult {

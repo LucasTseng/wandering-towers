@@ -1,122 +1,138 @@
-import type { CSSProperties } from 'react';
 import { VISUAL_3D } from '../game/visual3d';
+import { OCTAGON_CLIP, Prism3D } from './Prism3D';
 
 /**
- * 乌鸦堡：造型与普通塔一致（八边形柱体 + 锥顶），颜色为深蓝灰系，
- * 并带乌鸦纹章。可站在地面或被标记的塔顶，因此形状必须像塔。
+ * A05 鸦堡 —— 与 3D-asset-stage.html 的 castle() 同源：
+ * 8 面柱体（prism）+ 7 层收缩水平八边形圆盘成真锥顶 + 旗杆 / 酒红旗 / 金窗 / 城门。
+ * 宽 48 ≈ 塔顶 76 的 63%，符合 A05「55–65%」约束。
  */
 export function Castle3D() {
   const size = VISUAL_3D.castleSize;
-  const height = VISUAL_3D.castleHeight;
   const radius = size / 2;
-
-  // 八边形顶点（与 Tower3D 一致：startAngle = π/8）
-  const octagonPoints = Array.from({ length: 8 }, (_, index) => {
-    const angle = Math.PI / 8 + (index / 8) * Math.PI * 2;
-    return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
-  });
-
-  const roofHeight = height * 0.42;
-  const bodyHeight = height - roofHeight;
-  const body = '#33364a';
-  const sideA = '#3a3d54';
-  const sideB = '#252839';
+  const bodyHeight = VISUAL_3D.castleHeight * 0.54;
+  const roofHeight = VISUAL_3D.castleHeight - bodyHeight;
 
   return (
     <div
       title="Raven castle"
-      style={{
-        position: 'relative',
-        width: size,
-        height: size,
-        transformStyle: 'preserve-3d',
-      }}
+      style={{ position: 'relative', width: size, height: size, transformStyle: 'preserve-3d' }}
     >
-      {/* 八边形侧面墙 */}
-      {octagonPoints.map((point, index) => {
-        const next = octagonPoints[(index + 1) % octagonPoints.length]!;
-        const midX = (point.x + next.x) / 2;
-        const midY = (point.y + next.y) / 2;
-        const edge = Math.hypot(next.x - point.x, next.y - point.y);
-        const angle = Math.atan2(next.y - point.y, next.x - point.x);
-        return (
-          <div
-            key={index}
-            style={{
-              ...sideStyle,
-              width: edge + 1,
-              height: bodyHeight,
-              marginLeft: -(edge + 1) / 2,
-              marginTop: -bodyHeight / 2,
-              background: `linear-gradient(180deg, ${index % 2 === 0 ? sideA : body} 0%, ${
-                index % 2 === 0 ? sideB : sideA
-              } 100%)`,
-              transform: `translate3d(${midX}px, ${midY}px, ${bodyHeight / 2}px) rotateZ(${angle}rad) rotateX(90deg)`,
-            }}
-          />
-        );
-      })}
-
-      {/* 顶面八边形平台 */}
-      <div
-        style={{
-          position: 'absolute',
-          left: '50%',
-          top: '50%',
-          width: size,
-          height: size,
-          marginLeft: -size / 2,
-          marginTop: -size / 2,
-          clipPath:
-            'polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%)',
-          background: 'linear-gradient(135deg, #4a4d66 0%, #34384c 62%, #252839 100%)',
+      <Prism3D
+        sides={8}
+        radius={radius}
+        height={bodyHeight}
+        start={Math.PI / 8}
+        sideClassName="va-castle-side"
+        topStyle={{
+          background: 'linear-gradient(135deg, #5c6379 0%, #3b4158 62%, #2b3042 100%)',
           boxShadow: 'inset 0 2px 0 rgba(255,255,255,0.18)',
-          transform: `translateZ(${bodyHeight}px)`,
         }}
-      />
+        decorate={(index) => (
+          <>
+            {index % 2 === 0 && (
+              <div
+                className="va-window"
+                style={{ position: 'absolute', left: '38%', top: '24%', width: 7, height: 9 }}
+              />
+            )}
+            {(index === 0 || index === 4) && (
+              <div
+                className="va-door"
+                style={{ position: 'absolute', left: '36%', bottom: 0, width: '28%', height: '38%' }}
+              />
+            )}
+          </>
+        )}
+        overlay={
+          <>
+            {/* 底部接触阴影 */}
+            <div
+              style={{
+                position: 'absolute',
+                left: '50%',
+                top: '50%',
+                width: size * 1.15,
+                height: size * 0.5,
+                marginLeft: -(size * 1.15) / 2,
+                marginTop: -(size * 0.5) / 2,
+                borderRadius: '50%',
+                background: 'radial-gradient(ellipse at 50% 50%, rgba(0,0,0,0.5), transparent 70%)',
+                transform: 'translateZ(1px)',
+              }}
+            />
 
-      {/* 锥顶（乌鸦堡屋顶） */}
-      <div
-        style={{
-          position: 'absolute',
-          left: '50%',
-          top: '50%',
-          width: size * 0.92,
-          height: roofHeight,
-          marginLeft: -(size * 0.92) / 2,
-          marginTop: -roofHeight,
-          background: 'linear-gradient(180deg, #4a4d66 0%, #2a2d40 100%)',
-          clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)',
-          transform: `translateZ(${bodyHeight + roofHeight}px) rotateX(90deg)`,
-          transformOrigin: '50% 100%',
-        }}
-      />
+            {/* 7 层收缩圆盘 = 真锥顶（非竖立三角纸片） */}
+            {Array.from({ length: 7 }, (_, index) => {
+              const k = 1 - index / 7;
+              const w = size * 0.94 * k;
+              return (
+                <div
+                  key={`roof-${index}`}
+                  className="va-roof"
+                  style={{
+                    position: 'absolute',
+                    left: '50%',
+                    top: '50%',
+                    width: w,
+                    height: w,
+                    marginLeft: -w / 2,
+                    marginTop: -w / 2,
+                    clipPath: OCTAGON_CLIP,
+                    filter: `brightness(${0.82 + index * 0.045})`,
+                    transform: `translateZ(${bodyHeight + ((index + 1) * roofHeight) / 7}px)`,
+                  }}
+                />
+              );
+            })}
 
-      {/* 乌鸦纹章（顶面中央） */}
-      <div
-        style={{
-          position: 'absolute',
-          left: '50%',
-          top: '50%',
-          width: 16,
-          height: 13,
-          marginLeft: -8,
-          marginTop: -6,
-          background: '#111423',
-          clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)',
-          opacity: 0.92,
-          transform: `translateZ(${bodyHeight + 1}px)`,
-        }}
+            {/* 渡鸦尖塔 + 酒红旗 */}
+            <div
+              style={{
+                position: 'absolute',
+                left: '50%',
+                top: '50%',
+                width: 2,
+                height: 12,
+                marginLeft: -1,
+                marginTop: -12,
+                background: 'linear-gradient(180deg, #d9c9a3, #7a6c50)',
+                transformOrigin: '50% 100%',
+                transform: `translateZ(${bodyHeight + roofHeight}px) rotateX(90deg)`,
+              }}
+            />
+            <div
+              style={{
+                position: 'absolute',
+                left: '50%',
+                top: '50%',
+                width: 9,
+                height: 6,
+                marginLeft: 1,
+                marginTop: -17,
+                background: 'linear-gradient(90deg, #7a2436, #4a1c2b)',
+                clipPath: 'polygon(0% 0%,100% 30%,0% 100%)',
+                transform: `translateZ(${bodyHeight + roofHeight + 6}px) rotateX(90deg)`,
+              }}
+            />
+
+            {/* 门楣渡鸦剪影（C01 同款） */}
+            <div
+              className="va-raven-bird"
+              style={{
+                position: 'absolute',
+                left: '50%',
+                top: '50%',
+                width: 9,
+                height: 7,
+                marginLeft: -4.5,
+                marginTop: -bodyHeight * 0.18,
+                opacity: 0.9,
+                transform: `translateZ(${bodyHeight + 1}px)`,
+              }}
+            />
+          </>
+        }
       />
     </div>
   );
 }
-
-const sideStyle: CSSProperties = {
-  position: 'absolute',
-  left: '50%',
-  top: '50%',
-  transformOrigin: 'center center',
-  backfaceVisibility: 'hidden',
-  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -2px 0 rgba(0,0,0,0.2)',
-};

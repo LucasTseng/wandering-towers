@@ -5,7 +5,6 @@ import { potionsByState } from '../state/selectors';
 import { getSpell } from './spell-registry';
 import type { SpellCastContext } from './spell';
 import { advanceRavenCastleAfterWizardEntered } from '../rules/raven-castle';
-import { checkEndgameTrigger } from '../rules/endgame';
 
 /**
  * castSpell 主流程（V4 §14.9）
@@ -14,7 +13,7 @@ import { checkEndgameTrigger } from '../rules/endgame';
  * 2. 扣药水：取 cost 个 FULL → emit POTION_SPENT → state FULL→SPENT
  * 3. emit SPELL_CAST；player.spellsCastThisTurn++
  * 4. 委托 ISpell.resolve（复用基础规则函数）
- * 5. 法术致进堡 → advanceRavenCastleAfterWizardEntered + checkEndgameTrigger → turnEnds
+ * 5. 法术致进堡 → 城堡移动 + 立即结束回合（终局由 RuleEngine 统一检查）
  *
  * 返回 { turnEnds, endgameTriggered } 给 rule-engine 做回合清理。
  */
@@ -103,11 +102,11 @@ export function castSpell(
   // 4. 委托 resolve
   const result = spell.resolve(ctx);
 
-  // 5. 法术致进堡 → 城堡移动 + 终局检查 + 回合结束
+  // 5. 法术致进堡 → 城堡移动 + 立即结束回合
+  //    终局检查统一由 RuleEngine 在 applyEvents 之后执行，此处不再提前判断。
   if (result.enteredCastle) {
     advanceRavenCastleAfterWizardEntered(state, emit);
-    const triggered = checkEndgameTrigger(state, playerId, emit);
-    return { turnEnds: true, endgameTriggered: triggered };
+    return { turnEnds: true, endgameTriggered: false };
   }
 
   return { turnEnds: false, endgameTriggered: false };

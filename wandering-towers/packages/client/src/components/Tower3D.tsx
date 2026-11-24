@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import type { TowerID } from '@wt/shared';
 import { VISUAL_3D } from '../game/visual3d';
+import { OCTAGON_CLIP, Prism3D } from './Prism3D';
 
 interface Tower3DProps {
   towerId: TowerID;
@@ -11,162 +12,149 @@ interface Tower3DProps {
   tier?: number | undefined;
 }
 
-const OCTAGON_POINTS = Array.from({ length: 8 }, (_, index) => {
-  const angle = Math.PI / 8 + (index / 8) * Math.PI * 2;
-  const radius = VISUAL_3D.towerBaseWidth / 2;
-  return {
-    x: Math.cos(angle) * radius,
-    y: Math.sin(angle) * radius,
-  };
-});
-
+/**
+ * A01 / A02 / A03 / A04 —— 与 3D-asset-stage.html 的 tower() 同源。
+ *
+ * v2 修正（关键）：层亮度 brightness 只施加在「侧墙 / 顶面 / 城垛」这些叶子面上。
+ * 上一版把 filter 放在外层 preserve-3d 容器上，浏览器会强制 flatten，
+ * 8 面侧墙全部塌陷成平面 —— 这正是旧截图里塔看起来像贴片的原因。
+ */
 export function Tower3D({ towerId, hasRavenShield, selectable, inSlice, onClick, tier = 0 }: Tower3DProps) {
-  const lit = selectable || inSlice;
-  const body = '#667565';
-  const top = '#87947e';
-  const sideA = '#536350';
-  const sideB = '#465742';
-  const brightness = 1 + Math.min(0.12, tier * 0.025);
-  const clip = 'polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%)';
+  const variant = hasRavenShield ? 'raven' : 'stone';
+  // A04：逐层亮度递增但总差 ≤ 8%
+  const brightness = 1 + Math.min(0.08, tier * 0.016);
+  const leafFilter = `brightness(${brightness})`;
+  const label = `${towerId}${hasRavenShield ? ' raven mark' : ''}`;
+  // C05：切片选中 = 金实描边 + 上抬；可选起点 = 绿虚线环
+  const outline = inSlice
+    ? '2px solid #e8b339'
+    : selectable
+      ? '2px dashed #27ae60'
+      : '1px solid rgba(42,38,30,0.55)';
+  const h = VISUAL_3D.towerLayerHeight;
+  const w = VISUAL_3D.towerBaseWidth;
 
   return (
     <div
-      title={`${towerId}${hasRavenShield ? ' raven mark' : ''}`}
+      title={label}
       style={{
         position: 'relative',
-        width: VISUAL_3D.towerBaseWidth,
-        height: VISUAL_3D.towerBaseWidth,
+        width: w,
+        height: w,
         transformStyle: 'preserve-3d',
-        transform: lit ? `translateZ(${VISUAL_3D.towerSideDepth}px)` : undefined,
+        // 仅切片选中上抬；9 层堆叠的 fit-all 高度不变
+        transform: inSlice ? `translateZ(${VISUAL_3D.towerSideDepth}px)` : undefined,
         transition: 'transform 150ms ease',
       }}
     >
-      {OCTAGON_POINTS.map((point, index) => {
-        const next = OCTAGON_POINTS[(index + 1) % OCTAGON_POINTS.length]!;
-        const midX = (point.x + next.x) / 2;
-        const midY = (point.y + next.y) / 2;
-        const edge = Math.hypot(next.x - point.x, next.y - point.y);
-        const angle = Math.atan2(next.y - point.y, next.x - point.x);
-        return (
-          <div
-            key={index}
-            onClick={onClick}
-            data-interactive={onClick ? '' : undefined}
-            title={`${towerId}${hasRavenShield ? ' raven mark' : ''}`}
-            style={{
-              ...sideStyle,
-              width: edge + 1,
-              height: VISUAL_3D.towerLayerHeight,
-              marginLeft: -(edge + 1) / 2,
-              marginTop: -VISUAL_3D.towerLayerHeight / 2,
-              cursor: onClick ? 'pointer' : 'default',
-              background: `linear-gradient(180deg, ${index % 2 === 0 ? sideA : body} 0%, ${
-                index % 2 === 0 ? sideB : sideA
-              } 100%)`,
-              filter: `brightness(${brightness})`,
-              transform: `translate3d(${midX}px, ${midY}px, ${
-                VISUAL_3D.towerLayerHeight / 2
-              }px) rotateZ(${angle}rad) rotateX(90deg)`,
-            }}
-          />
-        );
-      })}
+      <Prism3D
+        sides={8}
+        radius={w / 2}
+        height={h}
+        start={Math.PI / 8}
+        withTop={false}
+        sideClassName="va-tower-side"
+        interactive={!!onClick}
+        sideProps={() => ({ onClick, title: label })}
+        sideVars={() =>
+          ({
+            '--side-top': variant === 'raven' ? '#66728d' : '#6a7180',
+            '--side-bottom': variant === 'raven' ? '#424c62' : '#4a5060',
+            filter: leafFilter,
+            cursor: onClick ? 'pointer' : 'default',
+          } as CSSProperties)
+        }
+        // A02：侧墙 0 / 4 面加低对比渡鸦剪影（素材台 decorate 同款）
+        decorate={(index) =>
+          index === 0 || index === 4 ? (
+            <div
+              className="va-raven-bird"
+              style={{ position: 'absolute', left: '38%', top: '32%', width: 9, height: 7, opacity: 0.55 }}
+            />
+          ) : null
+        }
+        overlay={
+          <>
+            {/* A03 顶面：button 保留原点击语义，clip-path 与侧墙共用八边形顶点 */}
+            <button
+              className="va-tower-face"
+              data-variant={variant}
+              onClick={onClick}
+              data-interactive={onClick ? '' : undefined}
+              title={label}
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: 0,
+                width: w,
+                height: w,
+                clipPath: OCTAGON_CLIP,
+                transform: `translateZ(${h}px)`,
+                filter: leafFilter,
+                border: outline,
+                padding: 0,
+                cursor: onClick ? 'pointer' : 'default',
+                boxShadow:
+                  inSlice || selectable
+                    ? '0 0 12px rgba(232,179,57,0.65), inset 0 2px 0 rgba(255,240,205,0.5)'
+                    : undefined,
+                color: '#2c303b',
+                fontSize: 9,
+                fontWeight: 700,
+                textShadow: '0 1px 0 rgba(255,255,255,0.45)',
+              }}
+            >
+              {towerId}
+            </button>
 
-      <button
-        onClick={onClick}
-        data-interactive={onClick ? '' : undefined}
-        style={{
-          position: 'absolute',
-          left: 0,
-          top: 0,
-          width: VISUAL_3D.towerBaseWidth,
-          height: VISUAL_3D.towerBaseWidth,
-          border: lit && inSlice ? '2px solid gold' : '1px solid rgba(35,43,30,0.4)',
-          padding: 0,
-          clipPath: clip,
-          cursor: onClick ? 'pointer' : 'default',
-          background: `linear-gradient(135deg, ${top} 0%, ${body} 62%, ${sideA} 100%)`,
-          boxShadow: lit
-            ? '0 0 12px rgba(255,215,0,0.8), inset 0 2px 0 rgba(255,255,255,0.22)'
-            : 'inset 0 2px 0 rgba(255,255,255,0.2)',
-          color: '#f5e9c8',
-          fontSize: 9,
-          fontWeight: 700,
-          textShadow: '0 1px 1px #000',
-          filter: `brightness(${brightness})`,
-          transform: `translateZ(${VISUAL_3D.towerLayerHeight}px)`,
-        }}
-      >
-        {towerId}
-      </button>
+            {/* A03 城垛：半径 30 > 顶面内圈，中心 3×2 巫师位不被遮挡 */}
+            {Array.from({ length: 8 }, (_, index) => {
+              const angle = Math.PI / 8 + (index / 8) * Math.PI * 2;
+              return (
+                <div
+                  key={index}
+                  className="va-battlement"
+                  data-variant={variant}
+                  style={{
+                    position: 'absolute',
+                    left: '50%',
+                    top: '50%',
+                    width: 8,
+                    height: 8,
+                    marginLeft: -4,
+                    marginTop: -4,
+                    filter: leafFilter,
+                    transform: `translate3d(${Math.cos(angle) * 30}px, ${Math.sin(angle) * 30}px, ${h + 4}px)`,
+                  }}
+                />
+              );
+            })}
 
-      {Array.from({ length: 8 }, (_, index) => {
-        const angle = Math.PI / 8 + (index / 8) * Math.PI * 2;
-        return (
-          <div
-            key={index}
-            style={{
-              position: 'absolute',
-              left: '50%',
-              top: '50%',
-              width: 9,
-              height: 9,
-              marginLeft: -4.5,
-              marginTop: -4.5,
-              background: top,
-              border: '1px solid rgba(0,0,0,0.22)',
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.18)',
-              transform: `translate3d(${Math.cos(angle) * 25}px, ${Math.sin(angle) * 25}px, ${
-                VISUAL_3D.towerLayerHeight + 5
-              }px)`,
-            }}
-          />
-        );
-      })}
-
-      {hasRavenShield && (
-        <div
-          title="乌鸦纹章"
-          style={{
-            position: 'absolute',
-            top: 14,
-            right: 14,
-            width: 16,
-            height: 16,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'radial-gradient(circle at 50% 40%, rgba(127,179,255,0.95), rgba(34,77,130,0.9))',
-            border: '1px solid rgba(190,220,255,0.95)',
-            borderRadius: '50%',
-            boxShadow: '0 0 8px rgba(127,179,255,0.85)',
-            // 放在塔顶面右上角（八边形内）：只有本层是顶塔时可见；
-            // 一旦上层塔叠上来，本标记落入上层塔体 Z 区间内被遮挡 → 不可见，
-            // 正好对应「顶塔带纹章才算合法落点」。
-            transform: `translateZ(${VISUAL_3D.towerLayerHeight + 6}px)`,
-          }}
-        >
-          {/* 乌鸦剪影（与 Space.tsx 地面纹章同款三角形） */}
-          <div
-            style={{
-              width: 9,
-              height: 7,
-              background: '#0b1220',
-              clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)',
-              opacity: 0.95,
-            }}
-          />
-        </div>
-      )}
+            {/* A02 / C01 渡鸦蓝圆徽：顶面右上角立件，被上层塔压住即不可见 */}
+            {hasRavenShield && (
+              <div
+                className="va-raven"
+                title="乌鸦纹章"
+                style={{
+                  position: 'absolute',
+                  top: 13,
+                  right: 13,
+                  width: 18,
+                  height: 18,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  // 3px 侧壁厚度（等效），不引入第二套几何语汇
+                  boxShadow: '0 2px 0 #224d82, 0 0 9px rgba(127,179,255,0.75)',
+                  transform: `translateZ(${h + 6}px)`,
+                }}
+              >
+                <div className="va-raven-bird" style={{ width: 11, height: 8, opacity: 0.9 }} />
+              </div>
+            )}
+          </>
+        }
+      />
     </div>
   );
 }
-
-const sideStyle: CSSProperties = {
-  position: 'absolute',
-  left: '50%',
-  top: '50%',
-  transformOrigin: 'center center',
-  backfaceVisibility: 'hidden',
-  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -2px 0 rgba(0,0,0,0.2)',
-};

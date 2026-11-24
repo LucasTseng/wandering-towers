@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ActionCommand, CardID, GameEvent, MovementCardDefinition, PlayerID, SpaceIndex, SpellID, TowerID, WizardID } from '@wt/shared';
 import { RuleError } from '@wt/engine';
 import type { ExecuteResult } from '@wt/engine';
@@ -9,7 +9,7 @@ import { defaultConfig, PLAYER_COLORS } from '../game/config';
 import { deriveAllSpaces } from '../game/selectors';
 import { getCardTemplate } from '../game/cardHelper';
 import { Dice } from '../components/Dice';
-import { StageViewport } from '../components/StageViewport';
+import { StageViewport, type TurnNotice } from '../components/StageViewport';
 import { HandPanel } from '../components/HandPanel';
 import { PlayerBar } from '../components/PlayerBar';
 import { PotionPanel } from '../components/PotionPanel';
@@ -47,12 +47,31 @@ const PHASE_LABEL: Record<string, string> = {
   GAME_FINISHED: '游戏结束',
 };
 
+/** 常见规则错误的中文提示；带动态信息（如空瓶数量）的错误直接用引擎 message */
+const RULE_ERROR_ZH: Record<string, string> = {
+  NOT_CURRENT_PLAYER: '现在不是你的回合',
+  INVALID_PHASE: '当前阶段不能执行该操作',
+  CARD_NOT_IN_HAND: '这张牌不在手牌中',
+  INVALID_WIZARD_TARGET: '目标巫师不可移动',
+  INVALID_TOWER_TARGET: '目标塔不可移动',
+  INVALID_MOVE_VALUE: '步数不合法',
+  NO_LEGAL_TARGET: '没有合法目标',
+  TARGET_CAPACITY_EXCEEDED: '落点已满（最多 6 名可见巫师）',
+  TOWER_CANNOT_LAND_ON_CASTLE: '塔不能落在乌鸦城堡上',
+  TOWER_IS_SEALED: '这座塔已被锁定',
+  SPELL_LIMIT_REACHED: '本回合施法次数已用完',
+  NOT_ENOUGH_FULL_POTIONS: '满药水瓶不足，无法施法',
+  NO_FULL_POTION: '没有满药水瓶',
+  INVALID_SPELL_TARGET: '法术目标不合法',
+  GAME_ALREADY_FINISHED: '游戏已结束',
+};
+
 function castCmd(playerId: PlayerID, type: ActionCommand['type'], payload: unknown): ActionCommand {
   return { commandId: '', playerId, type, payload: payload as ActionCommand['payload'] };
 }
 
 export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void }) {
-  const { state, events, dispatch, isFinished, exportSave } = useGame(defaultConfig(2), 42);
+  const { state, events, dispatch, isFinished, exportSave, reset } = useGame(defaultConfig(2), 42);
   const [intent, setIntent] = useState<UIIntent>({ type: 'IDLE' });
   const [error, setError] = useState<string | null>(null);
   const [sliceStart, setSliceStart] = useState<{ spaceIndex: SpaceIndex; towerId: TowerID } | null>(null);
@@ -62,6 +81,35 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
   const playerColor = PLAYER_COLORS[current] ?? '#888';
   // F2 颜色隔离（V2 §8.1）：所有 visible 巫师的 onClick 仅当 owner === current 时生效
   const cells = useMemo(() => deriveAllSpaces(state, current), [state, current]);
+
+  // ---------- 回合轮转提示（纯视觉） ----------
+  // 检测当前玩家 / 轮次变化：点击「结束回合」或进堡自动结束回合后，
+  // 在舞台中央弹出新回合玩家提示，2.9s 缓慢淡出；不阻断任何操作。
+  const [turnNotice, setTurnNotice] = useState<TurnNotice | null>(null);
+  const lastTurnRef = useRef<{ playerId: PlayerID; roundNumber: number } | null>(null);
+  const noticeSeqRef = useRef(0);
+
+  useEffect(() => {
+    const snapshot = { playerId: current, roundNumber: state.roundNumber };
+    const prev = lastTurnRef.current;
+    lastTurnRef.current = snapshot;
+    // 首次进入对局不弹提示；终局结算交由 WinnerPanel 接管
+    if (!prev || finished) return;
+    if (prev.playerId === snapshot.playerId && prev.roundNumber === snapshot.roundNumber) return;
+    noticeSeqRef.current += 1;
+    setTurnNotice({
+      key: noticeSeqRef.current,
+      playerId: snapshot.playerId,
+      roundNumber: snapshot.roundNumber,
+      color: PLAYER_COLORS[snapshot.playerId] ?? '#e8b339',
+    });
+  }, [current, state.roundNumber, finished]);
+
+  useEffect(() => {
+    if (!turnNotice) return;
+    const timer = window.setTimeout(() => setTurnNotice(null), 3000);
+    return () => window.clearTimeout(timer);
+  }, [turnNotice]);
 
   // U5 §10.1 响应式：< 960px 时降级为单列（舞台在上、侧栏在下）
   const [isNarrow, setIsNarrow] = useState(() =>
@@ -80,7 +128,10 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
       setError(null);
       return result;
     } catch (e) {
-      const msg = e instanceof RuleError ? e.code : (e as Error).message;
+      const msg =
+        e instanceof RuleError
+          ? RULE_ERROR_ZH[e.code] ?? (e.message && e.message !== e.code ? e.message : e.code)
+          : (e as Error).message;
       setError(msg);
       return null;
     }
@@ -329,9 +380,15 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
         <h1 style={{ margin: 0, fontSize: 18 }}>巫师飞塔</h1>
         <div style={{ fontSize: 13, flex: 1, textAlign: 'center' }}>
           当前：<strong>{current}</strong> · 阶段：{PHASE_LABEL[state.turnPhase] ?? state.turnPhase} · 轮次 {state.roundNumber}
+          {state.endgameTriggered && !finished && (
+            <span style={{ color: '#e8b339', marginLeft: 10, fontSize: 12 }}>
+              终局已触发 · 打完本轮后结算
+            </span>
+          )}
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
           <button
+            className="va-stone-button"
             onClick={() => {
               const save = exportSave();
               const blob = new Blob([JSON.stringify(save, null, 2)], { type: 'application/json' });
@@ -343,13 +400,13 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
               URL.revokeObjectURL(url);
             }}
             title="导出当前对局为 JSON（用于回放/复盘）"
-            style={{ cursor: 'pointer', fontSize: 12 }}
+            style={{ padding: '4px 10px', fontSize: 11 }}
           >
-            💾 导出
+            导出对局
           </button>
           {onEnterReplay && (
-            <button onClick={onEnterReplay} style={{ cursor: 'pointer', fontSize: 12 }}>
-              📼 加载
+            <button className="va-stone-button" onClick={onEnterReplay} style={{ padding: '4px 10px', fontSize: 11 }}>
+              加载回放
             </button>
           )}
         </div>
@@ -357,16 +414,16 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
 
       {error && (
         <div
+          className="va-panel"
           style={{
-            background: '#fdecea',
-            color: '#c0392b',
             padding: '4px 10px',
-            borderRadius: 4,
             fontSize: 12,
             flexShrink: 0,
+            color: '#f5e9c8',
+            borderColor: 'rgba(192,80,70,0.75)',
           }}
         >
-          ⚠ {error}
+          {error}
         </div>
       )}
 
@@ -387,6 +444,7 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
           sliceStart={sliceStart}
           highlightWizards={highlightableWizards}
           glowOff={finished}
+          turnNotice={turnNotice}
           onWizardClick={
             intent.type === 'PLAY_CARD_WIZARD' ||
             intent.type === 'CAST_SPELL_MOVE_WIZARD'
@@ -430,7 +488,9 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
             {intent.type !== 'IDLE' && intent.type !== 'PLAY_CARD_MODE_CHOICE' && intent.type !== 'DISCARD_REDRAW_FLOW' && (
               <div
                 style={{
-                  background: '#e8f5e9',
+                  background: 'linear-gradient(135deg, rgba(45,52,62,0.96), rgba(28,32,42,0.96))',
+                  border: '1px solid rgba(122,108,80,0.75)',
+                  color: '#f5e9c8',
                   padding: '4px 10px',
                   borderRadius: 4,
                   fontSize: 12,
@@ -453,7 +513,7 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
                   const locked = (isWizardIntent || isTowerIntent) && intent.locked;
                   if (!locked) {
                     return (
-                      <button onClick={resetIntent} style={{ marginLeft: 'auto', cursor: 'pointer' }}>取消</button>
+                      <button onClick={resetIntent} className="va-stone-button" style={{ marginLeft: 'auto', padding: '2px 8px', fontSize: 11 }}>取消</button>
                     );
                   }
                   // 锁定后若无合法目标（己方无可见巫师 / 场上无塔），提供"继续出牌"作废本牌出口
@@ -465,20 +525,22 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
                       <button
                         onClick={handleContinueNoTarget}
                         title="无合法目标，本牌作废并推进到下一步"
-                        style={{ marginLeft: 'auto', cursor: 'pointer' }}
+                        className="va-stone-button" style={{ marginLeft: 'auto', padding: '2px 8px', fontSize: 11 }}
                       >
                         继续出牌（本牌作废）
                       </button>
                     );
                   }
-                  return <span style={{ marginLeft: 'auto', color: '#888' }}>已锁定</span>;
+                  return <span style={{ marginLeft: 'auto', color: '#d9c9a3' }}>已锁定</span>;
                 })()}
               </div>
             )}
             {intent.type === 'DISCARD_REDRAW_FLOW' && (
               <div
                 style={{
-                  background: '#e8f5e9',
+                  background: 'linear-gradient(135deg, rgba(45,52,62,0.96), rgba(28,32,42,0.96))',
+                  border: '1px solid rgba(122,108,80,0.75)',
+                  color: '#f5e9c8',
                   padding: '4px 8px',
                   borderRadius: 4,
                   fontSize: 12,
@@ -497,17 +559,19 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
                     );
                     if (ok) resetIntent();
                   }}
-                  style={{ margin: '0 4px', cursor: 'pointer' }}
+                  className="va-stone-button" style={{ margin: '0 4px', padding: '2px 8px', fontSize: 11 }}
                 >
                   不选（直接结束）
                 </button>
-                <button onClick={resetIntent} style={{ marginLeft: 'auto', cursor: 'pointer' }}>取消</button>
+                <button onClick={resetIntent} className="va-stone-button" style={{ marginLeft: 'auto', padding: '2px 8px', fontSize: 11 }}>取消</button>
               </div>
             )}
             {intent.type === 'PLAY_CARD_MODE_CHOICE' && (
               <div
                 style={{
-                  background: '#e8f5e9',
+                  background: 'linear-gradient(135deg, rgba(45,52,62,0.96), rgba(28,32,42,0.96))',
+                  border: '1px solid rgba(122,108,80,0.75)',
+                  color: '#f5e9c8',
                   padding: '4px 8px',
                   borderRadius: 4,
                   fontSize: 12,
@@ -519,9 +583,9 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
                 }}
               >
                 <span>二选一牌（{intent.tmpl.moveValueMode === 'DICE' ? '骰' : `${intent.tmpl.fixedValue}`}格）：选模式</span>
-                <button onClick={() => chooseMode('WIZARD')} style={{ margin: '0 4px', cursor: 'pointer' }}>巫师</button>
-                <button onClick={() => chooseMode('TOWER')} style={{ margin: '0 4px', cursor: 'pointer' }}>塔</button>
-                <button onClick={resetIntent} style={{ marginLeft: 'auto', cursor: 'pointer' }}>取消</button>
+                <button onClick={() => chooseMode('WIZARD')} className="va-stone-button" style={{ margin: '0 4px', padding: '2px 8px', fontSize: 11 }}>巫师</button>
+                <button onClick={() => chooseMode('TOWER')} className="va-stone-button" style={{ margin: '0 4px', padding: '2px 8px', fontSize: 11 }}>塔</button>
+                <button onClick={resetIntent} className="va-stone-button" style={{ marginLeft: 'auto', padding: '2px 8px', fontSize: 11 }}>取消</button>
               </div>
             )}
             {/* F3 弃 3 重抽触发按钮：仅 ACTION_1 阶段 + 手牌非空 + 未结束 + 不在其他 intent */}
@@ -536,7 +600,8 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
                       setSliceStart(null);
                       setIntent({ type: 'DISCARD_REDRAW_FLOW' });
                     }}
-                    style={{ cursor: 'pointer', fontSize: 12, padding: '2px 10px' }}
+                    className="va-stone-button"
+                    style={{ padding: '3px 10px', fontSize: 11 }}
                     title="弃 3 张重抽（可选移动一座塔前进 1 格）"
                   >
                     弃 3 张重抽
@@ -572,6 +637,7 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
               state.turnPhase === TurnPhase.ACTION_2 ||
               state.turnPhase === TurnPhase.ACTION_DONE) && (
               <button
+                className="va-stone-button"
                 onClick={() => {
                   resetIntent();
                   safeDispatch(castCmd(current, 'END_TURN', {}));
@@ -579,14 +645,14 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
                 title="结束本回合（补牌并轮转到下一玩家）"
                 style={{
                   padding: '8px 10px',
-                  cursor: 'pointer',
-                  background: '#c0392b',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: 6,
-                  fontSize: 13,
+                  background: 'linear-gradient(180deg, #4a4e59, #2b303a)',
+                  color: '#f5e9c8',
+                  border: '1px solid #e8b339',
+                  borderRadius: 5,
+                  fontSize: 12,
                   fontWeight: 'bold',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                  letterSpacing: '1px',
+                  boxShadow: '0 0 10px rgba(232,179,57,0.25), inset 0 1px 0 rgba(255,240,205,0.15)',
                 }}
               >
                 结束回合
@@ -595,7 +661,16 @@ export function GameContainer({ onEnterReplay }: { onEnterReplay?: () => void })
         </aside>
       </div>
 
-      {isFinished && <WinnerPanel state={state} />}
+      {isFinished && (
+        <WinnerPanel
+          state={state}
+          onNewGame={() => {
+            reset();
+            resetIntent();
+            setError(null);
+          }}
+        />
+      )}
 
       {isDebugMode() && <DebugPanel state={state} dispatch={dispatch} />}
 

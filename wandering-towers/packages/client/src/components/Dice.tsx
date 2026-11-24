@@ -7,22 +7,23 @@ interface DiceProps {
   onRoll?: () => void;
 }
 
-/** 骰子面圆点位置（3x3 网格，1~6） */
-const PIP_POSITIONS: Record<number, [number, number][]> = {
-  1: [[1, 1]],
-  2: [[0, 0], [2, 2]],
-  3: [[0, 0], [1, 1], [2, 2]],
-  4: [[0, 0], [0, 2], [2, 0], [2, 2]],
-  5: [[0, 0], [0, 2], [1, 1], [2, 0], [2, 2]],
-  6: [[0, 0], [0, 2], [1, 0], [1, 2], [2, 0], [2, 2]],
+/** 骰面圆点百分比坐标（与 3D-asset-stage.html 的 pipPos 同源） */
+const PIP_POS: Record<number, [number, number][]> = {
+  1: [[50, 50]],
+  2: [[26, 26], [74, 74]],
+  3: [[26, 26], [50, 50], [74, 74]],
+  4: [[26, 26], [74, 26], [26, 74], [74, 74]],
+  5: [[26, 26], [74, 26], [50, 50], [26, 74], [74, 74]],
+  6: [[26, 26], [74, 26], [26, 50], [74, 50], [26, 74], [74, 74]],
 };
 
-const DICE_SIZE = 44;
+const SIZE = 24;
+const HALF = SIZE / 2;
 
 /**
- * 骰子牌掷骰组件。
- * - value===null：显示「点击掷骰」可点击按钮，点击后调 onRoll。
- * - value 为 1~6：显示对应点数圆点面，不可点击。
+ * D04 木质六面骰 —— v2 真 3D：24³ 立方体，6 个独立面各自带刻痕点阵，
+ * 不再是平面贴图按钮。与 3D-asset-stage.html 的 die() 同源。
+ * 正面显示当前点数 / 「掷」，其余 5 面固定 2/3/4/1/6。
  */
 export function Dice({ value, onRoll }: DiceProps) {
   const [spinning, setSpinning] = useState(false);
@@ -31,86 +32,83 @@ export function Dice({ value, onRoll }: DiceProps) {
   const handleClick = () => {
     if (rolled || spinning || !onRoll) return;
     setSpinning(true);
-    // 短暂抖动动画后真正掷出
     window.setTimeout(() => {
       setSpinning(false);
       onRoll();
     }, 180);
   };
 
-  const pips = rolled && value !== null ? PIP_POSITIONS[value] ?? [] : [];
+  const faces: { tr: string; n: number | null; front?: boolean }[] = [
+    { tr: `translateZ(${HALF}px)`, n: value, front: true },
+    { tr: `rotateY(180deg) translateZ(${HALF}px)`, n: 2 },
+    { tr: `rotateY(90deg) translateZ(${HALF}px)`, n: 3 },
+    { tr: `rotateY(-90deg) translateZ(${HALF}px)`, n: 4 },
+    { tr: `rotateX(90deg) translateZ(${HALF}px)`, n: 1 },
+    { tr: `rotateX(-90deg) translateZ(${HALF}px)`, n: 6 },
+  ];
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <button
-        onClick={handleClick}
-        disabled={rolled}
-        title={rolled ? `已掷出 ${value} 点` : '点击掷骰'}
-        style={{
-          width: DICE_SIZE,
-          height: DICE_SIZE,
-          padding: 0,
-          border: '1px solid rgba(35,43,30,0.5)',
-          borderRadius: 8,
-          background: 'linear-gradient(135deg, #f4ead1 0%, #d9c89a 62%, #b89e63 100%)',
-          boxShadow: rolled
-            ? 'inset 0 1px 0 rgba(255,255,255,0.4), 0 1px 3px rgba(0,0,0,0.3)'
-            : '0 0 10px rgba(255,215,0,0.7), inset 0 1px 0 rgba(255,255,255,0.4)',
-          cursor: rolled ? 'default' : 'pointer',
-          position: 'relative',
-          transform: spinning ? 'rotate(35deg) scale(0.92)' : 'none',
-          transition: 'transform 120ms ease',
-        }}
+      <div
+        className="va-ui-3d"
+        style={{ position: 'relative', width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       >
-        {/* 圆点面 */}
-        <div
+        <button
+          onClick={handleClick}
+          disabled={rolled}
+          title={rolled ? `已掷出 ${value} 点` : '点击掷骰'}
           style={{
-            position: 'absolute',
-            inset: 6,
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr 1fr',
-            gridTemplateRows: '1fr 1fr 1fr',
+            position: 'relative',
+            width: SIZE,
+            height: SIZE,
+            padding: 0,
+            border: 'none',
+            background: 'transparent',
+            transformStyle: 'preserve-3d',
+            transform: spinning ? 'rotate(35deg) scale(0.92)' : 'rotateX(-18deg) rotateY(22deg)',
+            transition: 'transform 120ms ease',
+            cursor: rolled ? 'default' : 'pointer',
           }}
         >
-          {Array.from({ length: 9 }, (_, i) => {
-            const row = Math.floor(i / 3);
-            const col = i % 3;
-            const has = pips.some(([r, c]) => r === row && c === col);
-            return (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {has && (
-                  <div
-                    style={{
-                      width: 7,
-                      height: 7,
-                      borderRadius: '50%',
-                      background: '#2c3e50',
-                      boxShadow: 'inset 0 1px 1px rgba(0,0,0,0.4)',
-                    }}
-                  />
-                )}
-              </div>
-            );
-          })}
-          {!rolled && (
+          {faces.map(({ tr, n, front }, index) => (
             <div
-              style={{
-                gridColumn: '1 / 4',
-                gridRow: '1 / 4',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 11,
-                fontWeight: 700,
-                color: '#2c3e50',
-              }}
+              key={index}
+              className="va-die-face"
+              style={{ position: 'absolute', inset: 0, transform: tr, backfaceVisibility: 'hidden' }}
             >
-              掷
+              {n === null ? (
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: '#f5e9c8',
+                    textShadow: '0 1px 1px rgba(0,0,0,0.6)',
+                  }}
+                >
+                  掷
+                </div>
+              ) : (
+                (PIP_POS[n] ?? []).map(([x, y], i) => (
+                  <div
+                    key={i}
+                    className="va-pip"
+                    style={{ position: 'absolute', left: `${x}%`, top: `${y}%`, width: 4, height: 4, marginLeft: -2, marginTop: -2 }}
+                  />
+                ))
+              )}
+              {front && rolled && (
+                <div style={{ position: 'absolute', inset: 0, boxShadow: '0 0 9px rgba(232,179,57,0.5)', pointerEvents: 'none' }} />
+              )}
             </div>
-          )}
-        </div>
-      </button>
-      <span style={{ fontSize: 12, color: '#2c3e50' }}>
+          ))}
+        </button>
+      </div>
+      <span style={{ fontSize: 12, color: '#f5e9c8' }}>
         {rolled ? `${value} 点` : '点击骰子掷出点数'}
       </span>
     </div>

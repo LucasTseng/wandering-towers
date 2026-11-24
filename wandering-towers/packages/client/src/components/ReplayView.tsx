@@ -55,45 +55,45 @@ export function ReplayView({ save, onExit }: ReplayViewProps) {
   const eventsUpToCursor = all.slice(0, cursor);
 
   return (
-    <div style={{ fontFamily: 'sans-serif', padding: 12, maxWidth: 1200, margin: '0 auto' }}>
+    <div className="va-replay" style={{ fontFamily: 'sans-serif', padding: 12, maxWidth: 1200, margin: '0 auto' }}>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1 style={{ margin: 0 }}>📼 回放 / {save.gameId}</h1>
+        <h1 style={{ margin: 0, fontSize: 20, color: '#e8b339', letterSpacing: 1 }}>回放 / {save.gameId}</h1>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span style={{ fontSize: 13, color: '#666' }}>{save.savedAt}</span>
+          <span style={{ fontSize: 13, color: '#b8bcc6' }}>{save.savedAt}</span>
           <button onClick={onExit} style={{ cursor: 'pointer' }}>退出回放</button>
         </div>
       </header>
 
       {/* 步进控件 */}
       <div
+        className="va-replay-panel"
         style={{
           display: 'flex',
           gap: 8,
           alignItems: 'center',
           padding: 8,
-          background: '#e3f2fd',
           borderRadius: 6,
           margin: '8px 0',
         }}
       >
-        <button onClick={() => setCursor(0)} disabled={cursor === 0}>⏮ 开头</button>
+        <button onClick={() => setCursor(0)} disabled={cursor === 0}>开头</button>
         <button onClick={() => setCursor((c) => Math.max(0, c - 1))} disabled={cursor === 0}>
-          ◀ 上一步
+          上一步
         </button>
         <button
           onClick={() => setPlaying((p) => !p)}
           disabled={cursor >= total}
           style={{ minWidth: 80 }}
         >
-          {playing ? '⏸ 暂停' : '▶ 播放'}
+          {playing ? '暂停' : '播放'}
         </button>
         <button
           onClick={() => setCursor((c) => Math.min(total, c + 1))}
           disabled={cursor >= total}
         >
-          下一步 ▶
+          下一步
         </button>
-        <button onClick={() => setCursor(total)} disabled={cursor === total}>⏭ 结尾</button>
+        <button onClick={() => setCursor(total)} disabled={cursor === total}>结尾</button>
         <span style={{ marginLeft: 16, fontSize: 13 }}>
           步进 {cursor} / {total}
         </span>
@@ -115,12 +115,13 @@ export function ReplayView({ save, onExit }: ReplayViewProps) {
       {/* 当前事件高亮 */}
       {currentEvent && (
         <div
+          className="va-replay-panel"
           style={{
-            background: '#fff3e0',
             padding: '6px 12px',
             borderRadius: 6,
             margin: '4px 0',
             fontSize: 13,
+            borderLeft: '2px solid #e8b339',
           }}
         >
           <strong>当前事件</strong> #{currentEvent.sequence} {currentEvent.type}
@@ -158,7 +159,7 @@ export function ReplayLauncher({ save, onExit }: { save: SaveGame | null; onExit
   if (loaded) {
     if (!isValidSave(loaded)) {
       return (
-        <div style={{ padding: 24 }}>
+        <div className="va-replay" style={{ padding: 24 }}>
           <p>存档格式无效</p>
           <button onClick={onExit}>返回</button>
         </div>
@@ -186,11 +187,11 @@ export function ReplayLauncher({ save, onExit }: { save: SaveGame | null; onExit
   };
 
   return (
-    <div style={{ padding: 24, maxWidth: 600, margin: '0 auto' }}>
-      <h1>📼 加载回放</h1>
+    <div className="va-replay" style={{ padding: 24, maxWidth: 600, margin: '0 auto' }}>
+      <h1 style={{ color: '#e8b339', letterSpacing: 1 }}>加载回放</h1>
       <p>选择 .json 存档文件：</p>
       <input type="file" accept="application/json,.json" onChange={handleFile} />
-      {error && <p style={{ color: '#c0392b' }}>{error}</p>}
+      {error && <p style={{ color: '#e88fa3' }}>{error}</p>}
       <p style={{ marginTop: 16 }}>
         <button onClick={onExit}>取消</button>
       </p>

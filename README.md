@@ -22,6 +22,8 @@ pnpm install
 pnpm dev          # 启动前端；加 ?debug 看调试面板
 ```
 
+访问 http://localhost:8008
+
 ## 根目录历史文档（仅作规则/需求参考，不维护）
 
 - 《巫师飞塔 : The Wandering Towers》完整规则与说明文档（V2）.md

@@ -44,17 +44,16 @@ export function LogPanel({ events }: { events: GameEvent[] }) {
   return (
     <>
       <button
-        className="wt-log-icon"
+        className="va-scroll-button"
         onClick={() => setOpen((v) => !v)}
         title="行动日志"
+        aria-label="行动日志"
         data-interactive
-      >
-        📜
-      </button>
+      />
       {open && (
         <div className="wt-log-panel">
           <div className="wt-log-head">
-            <span>📜 行动日志</span>
+            <span>行动日志</span>
             <button className="wt-log-close" onClick={() => setOpen(false)} title="收起" data-interactive>
               ✕
             </button>

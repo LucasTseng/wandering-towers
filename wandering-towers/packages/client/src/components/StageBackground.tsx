@@ -246,13 +246,84 @@ export function StageBackground({ theme }: StageBackgroundProps) {
       }
     };
 
+    /* === E04 云雾烛光：远景山峦 / 森林剪影 + 缓慢漂移的体积雾 ===
+       canvas 保持透明，让 .wt-stage-viewport::before 的夜空底色透出；
+       远景对比度刻意压低，不抢 16 格与塔体焦点。 */
+    const drawAtmosphere = (tSec: number) => {
+      ctx.clearRect(0, 0, cssW, cssH);
+      const horizon = cssH * 0.74;
+
+      // 远山：两层低对比剪影
+      for (let layer = 0; layer < 2; layer++) {
+        ctx.save();
+        ctx.globalAlpha = layer === 0 ? 0.22 : 0.3;
+        ctx.fillStyle = layer === 0 ? '#3b4a63' : '#242c3b';
+        ctx.beginPath();
+        ctx.moveTo(0, cssH);
+        const amp = (layer === 0 ? 0.07 : 0.045) * cssH;
+        const baseY = horizon - (layer === 0 ? 0.05 * cssH : 0);
+        for (let x = 0; x <= cssW + 12; x += 12) {
+          const k = x / Math.max(1, cssW);
+          const ridge =
+            Math.sin(k * 7.2 + layer * 1.7) * amp +
+            Math.sin(k * 15.4 + layer * 2.3) * amp * 0.42 +
+            Math.sin(k * 3.1 + layer) * amp * 0.7;
+          ctx.lineTo(x, baseY - ridge);
+        }
+        ctx.lineTo(cssW, cssH);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // 森林剪影：地平线上稀疏尖顶
+      ctx.save();
+      ctx.globalAlpha = 0.26;
+      ctx.fillStyle = '#1b2230';
+      for (let i = 0; i < 26; i++) {
+        const x = (i / 26) * cssW + Math.sin(i * 3.7) * 9;
+        const h = (0.028 + ((i * 37) % 11) / 260) * cssH;
+        const w = h * 0.42;
+        ctx.beginPath();
+        ctx.moveTo(x, horizon + 2 - h);
+        ctx.lineTo(x - w, horizon + 4);
+        ctx.lineTo(x + w, horizon + 4);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.restore();
+
+      // 体积雾：三团缓慢横向漂移的软光斑
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      for (let i = 0; i < 3; i++) {
+        const cx = ((0.2 + i * 0.3 + tSec * 0.004 * (i + 1)) % 1.4 - 0.2) * cssW;
+        const cy = horizon - (0.04 + i * 0.03) * cssH;
+        const r = (0.2 + i * 0.05) * Math.min(cssW, cssH);
+        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+        g.addColorStop(0, i === 1 ? 'rgba(246,160,44,0.07)' : 'rgba(127,179,255,0.07)');
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, cssW, cssH);
+      }
+      ctx.restore();
+    };
+
     /* === 主题分发 === */
     resize();
 
     if (theme === 'dark') {
-      // 暗夜：canvas 透明，透出 .wt-stage-viewport::before 的暗色径向 + 内阴影
+      const ro = new ResizeObserver(resize);
+      ro.observe(parent);
+      const loop = () => {
+        const tSec = (performance.now() - t0) / 1000;
+        drawAtmosphere(tSec);
+        raf = requestAnimationFrame(loop);
+      };
+      raf = requestAnimationFrame(loop);
       return () => {
-        /* no-op */
+        cancelAnimationFrame(raf);
+        ro.disconnect();
       };
     }
 

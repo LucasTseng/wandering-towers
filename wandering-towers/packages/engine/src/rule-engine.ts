@@ -9,7 +9,7 @@ import { createRng } from './state/rng';
 import { playMovementCard } from './rules/play-card';
 import { discardRedraw, skipSecondAction } from './rules/discard-redraw';
 import { endTurnCleanup } from './rules/turn-flow';
-import { finalizeWinners } from './rules/endgame';
+import { checkEndgameTriggerForAnyPlayer, finalizeWinners } from './rules/endgame';
 import { castSpell } from './spells/cast-spell';
 // 副作用导入：模块加载时自动注册全部法术实现到 spell-registry
 import './spells/implementations';
@@ -108,14 +108,28 @@ export class RuleEngine {
     }
 
     // 应用本命令产生的事件到状态
-    // 注意：acc.all() 返回内部数组引用，须先快照长度，避免清理阶段追加事件后切片错位。
-    const preCleanupCount = acc.count();
-    applyEvents(this.state, acc.all().slice(0, preCleanupCount));
+    // 注意：acc.all() 返回内部数组引用，各阶段须各自快照区间，避免事件被重复 apply。
+    const commandEnd = acc.count();
+    applyEvents(this.state, acc.all().slice(0, commandEnd));
+
+    // 终局检查（V2 §34/§35）：必须在事件应用**之后**执行。
+    // 规则函数只 emit 事件（进堡、封印奖励翻瓶、施法消耗都到此刻才落到 state），
+    // 且必须覆盖 END_TURN / DISCARD_REDRAW / 塔牌封印等所有命令路径，
+    // 不能只挂在「进堡」分支——否则条件达成后永远不会再被检查。
+    const beforeEndgame = acc.count();
+    if (checkEndgameTriggerForAnyPlayer(this.state, emit)) {
+      endgameTriggered = true;
+    }
+    const afterEndgame = acc.count();
+    if (afterEndgame > beforeEndgame) {
+      applyEvents(this.state, acc.all().slice(beforeEndgame, afterEndgame));
+    }
 
     // 回合结束清理：补牌 + 轮转 + 终局结算
     if (endTurn) {
+      const beforeCleanup = acc.count();
       const cleanup = endTurnCleanup(this.state, emit);
-      applyEvents(this.state, acc.all().slice(preCleanupCount));
+      applyEvents(this.state, acc.all().slice(beforeCleanup));
       if (cleanup.gameFinished) {
         // 本轮结束且终局已触发 -> 结算胜负
         const beforeFinalize = acc.count();

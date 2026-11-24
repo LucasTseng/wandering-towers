@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>巫师飞塔 · 3D 视觉素材板</title>
+<style>
+  :root {
+    --paper: #f6f2e8;
+    --card: #fffdf8;
+    --ink: #22262f;
+    --muted: #6f6a5e;
+    --line: #e3dac6;
+    --stage: #1a1d24;
+    --stone: #3b3f4a;
+    --warm: #d9c9a3;
+    --blue: #7fb3ff;
+    --gold: #e8b339;
+    --green: #27ae60;
+    --wine: #7a2436;
+    --lime: #a8d84a;
+    --sky: #4a6a92;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 40px 32px 64px;
+    background:
+      radial-gradient(circle at 12% 0%, #fffdf6 0%, transparent 45%),
+      radial-gradient(circle at 90% 8%, #eee7d4 0%, transparent 40%),
+      var(--paper);
+    color: var(--ink);
+    font: 14px/1.65 "PingFang SC", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+  header { border-bottom: 1px solid var(--line); padding-bottom: 22px; margin-bottom: 30px; }
+  .eyebrow { font-size: 11px; letter-spacing: 2.4px; color: var(--wine); font-weight: 700; text-transform: uppercase; }
+  h1 { margin: 8px 0 6px; font-size: 30px; letter-spacing: 1px; font-weight: 700; }
+  .lede { margin: 0; color: var(--muted); font-size: 13px; max-width: 760px; }
+  .tags { margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .tag { font-size: 11px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 20px; background: #fffdf8; color: var(--muted); }
+  .tag.key { border-color: #d9c7a4; color: #7a5a24; background: #fbf3e2; }
+  .refbar { margin-top: 14px; padding: 10px 14px; border: 1px dashed #c9b489; border-radius: 8px; background: #fbf3e2; font-size: 12px; color: #7a5a24; }
+  .refbar a { color: #7a2436; font-weight: 700; text-decoration: none; border-bottom: 1px solid #7a2436; }
+
+  h2 { font-size: 16px; margin: 38px 0 4px; letter-spacing: .6px; display: flex; align-items: center; gap: 10px; }
+  h2::before { content: ''; width: 4px; height: 16px; border-radius: 2px; background: var(--wine); display: inline-block; }
+  .sub { color: var(--muted); font-size: 12px; margin: 0 0 16px 14px; }
+
+  /* 配色 */
+  .palette { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 10px; }
+  .sw { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--card); }
+  .sw i { display: block; height: 58px; }
+  .sw b { display: block; font-size: 11.5px; padding: 8px 10px 2px; font-weight: 600; }
+  .sw span { display: block; font-size: 10.5px; color: var(--muted); padding: 0 10px 9px; letter-spacing: .5px; }
+
+  /* 素材卡 */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(258px, 1fr)); gap: 14px; }
+  .item { border: 1px solid var(--line); border-radius: 12px; background: var(--card); overflow: hidden; transition: transform .18s ease, box-shadow .18s ease; }
+  .item:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(60,45,20,.10); }
+  .preview {
+    height: 158px;
+    background: radial-gradient(circle at 50% 38%, #2a2d35 0%, #14161c 100%);
+    display: flex; align-items: center; justify-content: center;
+    position: relative; border-bottom: 1px solid rgba(0,0,0,.08);
+  }
+  .preview::after {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    box-shadow: inset 0 0 32px rgba(0,0,0,.42);
+  }
+  .preview svg { width: 100%; height: 100%; }
+  .meta { padding: 11px 13px 13px; }
+  .code { font-size: 10px; font-weight: 700; letter-spacing: 1.4px; color: var(--wine); }
+  .name { font-size: 13.5px; font-weight: 700; margin: 1px 0 5px; }
+  .desc { font-size: 11.5px; color: var(--muted); line-height: 1.55; }
+  .use { margin-top: 8px; font-size: 10.5px; color: #7a6a4c; background: #f7f1e3; border-radius: 5px; padding: 3px 7px; display: inline-block; }
+
+  /* 材质与光 */
+  .mats { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+  .mat { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--card); }
+  .mat i { display: block; height: 54px; }
+  .mat b { display: block; font-size: 11.5px; padding: 8px 10px 9px; font-weight: 600; }
+  .stone-tex { background: linear-gradient(135deg,#4a4e59,#333741 55%,#434853); position: relative; }
+  .stone-tex::after { content:''; position:absolute; inset:0; background: repeating-linear-gradient(28deg,transparent 0 13px,rgba(255,255,255,.05) 13px 14px), repeating-linear-gradient(-62deg,transparent 0 19px,rgba(0,0,0,.10) 19px 20px); }
+  .paper-tex { background: linear-gradient(135deg,#e9d9b5,#d2bd93); position: relative; }
+  .paper-tex::after { content:''; position:absolute; inset:0; background: repeating-linear-gradient(90deg,transparent 0 3px,rgba(120,90,50,.07) 3px 4px); }
+  .wood-tex { background: linear-gradient(135deg,#9a6a3f,#70492b); position: relative; }
+  .wood-tex::after { content:''; position:absolute; inset:0; background: repeating-linear-gradient(8deg,transparent 0 7px,rgba(0,0,0,.10) 7px 9px); }
+  .glass-tex { background: linear-gradient(135deg,rgba(127,179,255,.35),rgba(217,201,163,.18)),#2b3440; position:relative; }
+  .glass-tex::after { content:''; position:absolute; inset:0; background: linear-gradient(115deg,rgba(255,255,255,.22) 0 18%,transparent 18% 62%,rgba(255,255,255,.08) 62% 70%,transparent 70%); }
+  .metal-tex { background: linear-gradient(135deg,#8a7c58,#5c523c); position:relative; }
+  .metal-tex::after { content:''; position:absolute; inset:0; background: linear-gradient(100deg,transparent 0 40%,rgba(255,240,200,.20) 48%,transparent 56%); }
+
+  .rules { border: 1px solid var(--line); border-radius: 12px; background: var(--card); padding: 16px 20px; }
+  .rules ol { margin: 0; padding-left: 20px; }
+  .rules li { font-size: 12.5px; color: #4a4740; margin: 5px 0; }
+  .rules b { color: var(--ink); }
+  footer { margin-top: 34px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 11px; color: var(--muted); display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Visual Asset Library v1 · 2D Reference（保留）</div>
+  <h1>巫师飞塔 · 2D 等距参考板</h1>
+  <p class="lede">统一的「暗石 + 暖烛 + 蓝符 + 金选」3D 视觉语言。造型辨识度取自原作（可叠矮塔、渡鸦蓝盾、尖帽米宝、药水瓶、打开的书卡牌、升腾悬浮），底色沿用项目既有烛光舞台。以下为可直接取用的可缩放矢量元素与色值。</p>
+  <div class="tags">
+    <span class="tag key">不改功能逻辑</span>
+    <span class="tag">八 / 十六边形几何</span>
+    <span class="tag">55° 固定斜俯</span>
+    <span class="tag">哑光石 · 纸 · 木 · 玻璃</span>
+    <span class="tag">原创转译 · 无官方素材</span>
+  </div>
+  <div class="refbar">本页是 <b>2D 等距示意</b>（SVG 绘制的平面投影），仅用于配色、造型与编号对照，不是真正可旋转的 3D 元素。需要真实 CSS 3D 体块请打开 <a href="3D-asset-stage.html">真 3D 素材台 →</a>，编号规格见 <a href="README.md">README.md</a>。</div>
+</header>
+
+<h2>01 / 主配色</h2>
+<p class="sub">台面四色为骨架，符号三色为语义，原作点缀色仅作魔法高光层；玩家色严格沿用 config.ts。</p>
+<div class="palette">
+  <div class="sw"><i style="background:#1a1d24"></i><b>舞台底</b><span>#1A1D24</span></div>
+  <div class="sw"><i style="background:#3b3f4a"></i><b>石质塔身</b><span>#3B3F4A</span></div>
+  <div class="sw"><i style="background:#d9c9a3"></i><b>暖石木平台</b><span>#D9C9A3</span></div>
+  <div class="sw"><i style="background:#f5e9c8"></i><b>羊皮纸字色</b><span>#F5E9C8</span></div>
+  <div class="sw"><i style="background:#7fb3ff"></i><b>渡鸦蓝符文</b><span>#7FB3FF</span></div>
+  <div class="sw"><i style="background:#e8b339"></i><b>选中金辉</b><span>#E8B339</span></div>
+  <div class="sw"><i style="background:#27ae60"></i><b>可选绿</b><span>#27AE60</span></div>
+  <div class="sw"><i style="background:#7a2436"></i><b>酒红巫师袍</b><span>#7A2436</span></div>
+  <div class="sw"><i style="background:#a8d84a"></i><b>青柠魔光</b><span>#A8D84A</span></div>
+  <div class="sw"><i style="background:#4a6a92"></i><b>云雾蓝夜空</b><span>#4A6A92</span></div>
+  <div class="sw"><i style="background:linear-gradient(90deg,#e74c3c 0 16.6%,#3498db 16.6% 33.2%,#27ae60 33.2% 50%,#f1c40f 50% 66.6%,#9b59b6 66.6% 83.2%,#e67e22 83.2%)"></i><b>玩家六色</b><span>CONFIG.TS</span></div>
+</div>
+
+<h2>02 / 塔体与建筑</h2>
+<p class="sub">A 类代表元素。矮胖锥台、平顶可站城垛、无尖屋顶；纹章随塔移动。</p>
+<div class="grid">
+
+  <div class="item">
+    <div class="preview"><svg viewBox="0 0 200 158" aria-label="石棱台塔身">
+      <defs>
+        <linearGradient id="a1top" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c9b98f"/><stop offset="1" stop-color="#a2916d"/></linearGradient>
+        <linearGradient id="a1l" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#4c5260"/><stop offset="1" stop-color="#3b3f4a"/></linearGradient>
+        <linearGradient id="a1f" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5c6270"/><stop offset="1" stop-color="#414550"/></linearGradient>
+      </defs>
+      <ellipse cx="100" cy="128" rx="52" ry="10" fill="#000" opacity=".38"/>
+      <polygon points="132,62 116,70 116,106 132,98" fill="url(#a1l)"/>
+      <polygon points="116,70 84,70 84,106 116,106" fill="url(#a1f)"/>
+      <polygon points="84,70 68,62 68,98 84,106" fill="#343843"/>
+      <polygon points="68,62 78,50 122,50 132,62 116,70 84,70" fill="url(#a1top)"/>
+      <polygon points="76,59 84,53 116,53 124,59 113,65 87,65" fill="none" stroke="#7a6c50" stroke-width="1" opacity=".7"/>
+      <g fill="#b9a983">
+        <rect x="78" y="46" width="8" height="7" rx="1"/><rect x="96" y="46" width="8" height="7" rx="1"/><rect x="114" y="46" width="8" height="7" rx="1"/>
+      </g>
+      <g stroke="#2f333d" stroke-width=".8" opacity=".55">
+        <path d="M84 84 H116 M84 95 H116 M100 70 V84 M100 95 V106 M68 78 H84 M116 78 H132"/>
+      </g>
+      <path d="M68 62 L84 70 L116 70 L132 62" fill="none" stroke="#e8d6ac" stroke-width="1" opacity=".5"/>
+    </svg></div>
+    <div class="meta"><div class="code">A01</div><div class="name">石棱台塔身</div><div class="desc">八边形矮胖锥台，粗凿石砖缝、顶面城垛，暖灰石哑光。</div><span class="use">普通塔 T02/04/06/08</span></div>
+  </div>
+
+  <div class="item">
+    <div class="preview"><svg viewBox="0 0 200 158" aria-label="渡鸦纹章塔">
+      <defs>
+        <radialGradient id="a2g"><stop offset="0" stop-color="#a8d0ff"/><stop offset=".62" stop-color="#4b83c8"/><stop offset="1" stop-color="#224d82"/></radialGradient>
+        <linearGradient id="a2f" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#66728d"/><stop offset="1" stop-color="#424c62"/></linearGradient>
+      </defs>
+      <ellipse cx="100" cy="128" rx="52" ry="10" fill="#000" opacity=".38"/>
+      <polygon points="132,62 116,70 116,106 132,98" fill="#4a5570"/>
+      <polygon points="116,70 84,70 84,106 116,106" fill="url(#a2f)"/>
+      <polygon points="84,70 68,62 68,98 84,106" fill="#39435a"/>
+      <polygon points="68,62 78,50 122,50 132,62 116,70 84,70" fill="#a9b6c9"/>
+      <polygon points="76,59 84,53 116,53 124,59 113,65 87,65" fill="#8b98ae"/>
+      <g fill="#9aa7bb"><rect x="78" y="46" width="8" height="7" rx="1"/><rect x="96" y="46" width="8" height="7" rx="1"/><rect x="114" y="46" width="8" height="7" rx="1"/></g>
+      <g stroke="#33405a" stroke-width=".8" opacity=".5"><path d="M84 84 H116 M84 95 H116 M100 70 V84 M100 95 V106"/></g>
+      <g transform="translate(116 56)">
+        <circle r="11" fill="url(#a2g)" stroke="#e8d6ac" stroke-width="1.2"/>
+        <circle r="11" fill="none" stroke="#7fb3ff" stroke-width="3" opacity=".28"/>
+        <path d="M-6 2 L-2 -3 L0 0 L2 -3 L6 2 L2 2 L0 6 L-2 2 Z" fill="#14161c" opacity=".88"/>
+      </g>
+    </svg></div>
+    <div class="meta"><div class="code">A02 / C01</div><div class="name">渡鸦纹章塔 · 蓝圆徽</div><div class="desc">蓝灰石身，顶面右上角嵌蓝色径向圆盾与乌鸦剪影，细金外圈。</div><span class="use">纹章塔 / 地面纹章位</span></div>
+  </div>
+
+  <div class="item">
+    <div class="preview"><svg viewBox="0 0 200 158" aria-label="塔堆与升腾魔力环">
+      <defs><linearGradient id="a3s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5e6472"/><stop offset="1" stop-color="#3a3e4a"/></linearGradient></defs>
+      <ellipse cx="100" cy="136" rx="56" ry="9" fill="#000" opacity=".4"/>
+      <ellipse cx="100" cy="130" rx="46" ry="9" fill="none" stroke="#7fb3ff" stroke-width="1.6" opacity=".65"/>
+      <ellipse cx="100" cy="130" rx="38" ry="6" fill="none" stroke="#a8d0ff" stroke-width=".8" opacity=".5" stroke-dasharray="3 5"/>
+      <g fill="#a8d84a" opacity=".85"><circle cx="56" cy="120" r="1.6"/><circle cx="146" cy="116" r="1.4"/><circle cx="68" cy="136" r="1.2"/><circle cx="138" cy="138" r="1.5"/></g>
+      <g>
+        <polygon points="64,104 136,104 136,124 64,124" fill="url(#a3s)"/><polygon points="64,104 76,96 124,96 136,104" fill="#c9b98f"/>
+        <polygon points="68,78 132,78 132,98 68,98" fill="#666d7c"/><polygon points="68,78 79,71 121,71 132,78" fill="#d0c096"/>
+        <polygon points="72,52 128,52 128,72 72,72" fill="#727a8a"/><polygon points="72,52 82,45 118,45 128,52" fill="#d8c8a0"/>
+      </g>
+      <g stroke="#2b2f39" stroke-width=".8" opacity=".45"><path d="M64 114 H136 M68 88 H132 M72 62 H128"/></g>
+      <path d="M100 38 L100 30" stroke="#7fb3ff" stroke-width="1" opacity=".7"/>
+    </svg></div>
+    <div class="meta"><div class="code">A04 / A06</div><div class="name">塔堆分层 · 升腾魔力基座</div><div class="desc">逐层微增亮、1–2px 暗缝；塔底脱离软阴影 + 蓝符文环 + 稀疏星屑表达悬浮。</div><span class="use">2–9 层堆叠 / 塔移动</span></div>
+  </div>
+
+  <div class="item">
+    <div class="preview"><svg viewBox="0 0 200 158" aria-label="鸦堡 Ravenskeep">
+      <defs><linearGradient id="a4b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4b5066"/><stop offset="1" stop-color="#2b3042"/></linearGradient></defs>
+      <ellipse cx="100" cy="132" rx="46" ry="9" fill="#000" opacity=".42"/>
+      <polygon points="70,72 130,72 130,120 70,120" fill="url(#a4b)"/>
+      <polygon points="70,72 84,62 116,62 130,72" fill="#5c6379"/>
+      <polygon points="66,72 100,34 134,72" fill="#6b3a48"/>
+      <polygon points="66,72 100,34 100,72" fill="#7a4250"/>
+      <path d="M100 34 V20" stroke="#d9c9a3" stroke-width="1.6"/>
+      <path d="M100 20 L114 24 L100 29 Z" fill="#7a2436"/>
+      <g fill="#e8b339" opacity=".9"><rect x="83" y="86" width="7" height="10" rx="3"/><rect x="110" y="86" width="7" height="10" rx="3"/></g>
+      <path d="M93 120 V102 Q100 96 107 102 V120" fill="#1b1f2c"/>
+      <path d="M100 66 L94 60 L97 60 L100 56 L103 60 L106 60 Z" fill="#14161c" opacity=".9"/>
+      <g stroke="#202538" stroke-width=".8" opacity=".5"><path d="M70 92 H130 M70 106 H130"/></g>
+    </svg></div>
+    <div class="meta"><div class="code">A05</div><div class="name">鸦堡 Ravenskeep</div><div class="desc">塔形八边柱 + 暗红锥顶、金窗、渡鸦尖塔与旗，底部接触阴影。</div><span class="use">地面 / 塔顶城堡位</span></div>
+  </div>
+</div>
+
+<h2>03 / 角色、符号与光效</h2>
+<p class="sub">B / C 类。尖帽米宝保留木质圆钝手感；状态色语义固定不可互换。</p>
+<div class="grid">
+
+  <div class="item">
+    <div class="preview"><svg viewBox="0 0 200 158" aria-label="尖帽巫师米宝六色">
+      <g id="wizrow">
+        <g transform="translate(28 0)"><ellipse cx="0" cy="126" rx="13" ry="4" fill="#000" opacity=".45"/><path d="M-11 122 Q-11 88 0 84 Q11 88 11 122 Z" fill="#e74c3c"/><path d="M-9 88 L0 54 L9 88 Z" fill="#c0392b"/><path d="M-11 88 Q0 94 11 88" fill="none" stroke="#f5e9c8" stroke-width="1.4" opacity=".65"/><ellipse cx="0" cy="99" rx="5" ry="6" fill="#2a2027" opacity=".55"/></g>
+        <g transform="translate(58 0)"><ellipse cx="0" cy="126" rx="13" ry="4" fill="#000" opacity=".45"/><path d="M-11 122 Q-11 88 0 84 Q11 88 11 122 Z" fill="#3498db"/><path d="M-9 88 L0 54 L9 88 Z" fill="#2476ad"/><ellipse cx="0" cy="99" rx="5" ry="6" fill="#2a2027" opacity=".55"/></g>
+        <g transform="translate(88 0)"><ellipse cx="0" cy="126" rx="13" ry="4" fill="#000" opacity=".45"/><path d="M-11 122 Q-11 88 0 84 Q11 88 11 122 Z" fill="#27ae60"/><path d="M-9 88 L0 54 L9 88 Z" fill="#1d8449"/><ellipse cx="0" cy="99" rx="5" ry="6" fill="#2a2027" opacity=".55"/></g>
+        <g transform="translate(118 0)"><ellipse cx="0" cy="126" rx="13" ry="4" fill="#000" opacity=".45"/><path d="M-11 122 Q-11 88 0 84 Q11 88 11 122 Z" fill="#f1c40f"/><path d="M-9 88 L0 54 L9 88 Z" fill="#c9a20b"/><ellipse cx="0" cy="99" rx="5" ry="6" fill="#2a2027" opacity=".55"/></g>
+        <g transform="translate(148 0)"><ellipse cx="0" cy="126" rx="13" ry="4" fill="#000" opacity=".45"/><path d="M-11 122 Q-11 88 0 84 Q11 88 11 122 Z" fill="#9b59b6"/><path d="M-9 88 L0 54 L9 88 Z" fill="#7d4296"/><ellipse cx="0" cy="99" rx="5" ry="6" fill="#2a2027" opacity=".55"/></g>
+        <g transform="translate(178 0)"><ellipse cx="0" cy="126" rx="13" ry="4" fill="#000" opacity=".45"/><path d="M-11 122 Q-11 88 0 84 Q11 88 11 122 Z" fill="#e67e22"/><path d="M-9 88 L0 54 L9 88 Z" fill="#bf6115"/><ellipse cx="0" cy="99" rx="5" ry="6" fill="#2a2027" opacity=".55"/></g>
+      </g>
+      <ellipse cx="88" cy="126" rx="15" ry="5" fill="none" stroke="#e8b339" stroke-width="2" opacity=".95"/>
+      <ellipse cx="88" cy="126" rx="20" ry="8" fill="none" stroke="#e8b339" stroke-width="4" opacity=".22"/>
+    </svg></div>
+    <div class="meta"><div class="code">B01 / B02</div><div class="name">尖帽巫师米宝 · 状态环</div><div class="desc">尖帽锥 + 圆钝袍身 + 无脸暗面，木质哑光；高亮仅给巫师，塔不加发光。</div><span class="use">全场棋子 / 选中高亮</span></div>
+  </div>
+
+  <div class="item">
+    <div class="preview"><svg viewBox="0 0 200 158" aria-label="三态状态环与符文刻印">
+      <g transform="translate(48 74)">
+        <circle r="30" fill="none" stroke="#e8b339" stroke-width="2.4"/>
+        <circle r="30" fill="none" stroke="#e8b339" stroke-width="7" opacity=".16"/>
+        <circle r="20" fill="none" stroke="#e8b339" stroke-width=".8" opacity=".55" stroke-dasharray="2 4"/>
+        <text x="0" y="4" text-anchor="middle" fill="#e8b339" font-size="9" font-family="sans-serif">目标</text>
+      </g>
+      <g transform="translate(100 74)">
+        <circle r="30" fill="none" stroke="#27ae60" stroke-width="2.2" stroke-dasharray="6 5"/>
+        <circle r="30" fill="none" stroke="#27ae60" stroke-width="7" opacity=".12"/>
+        <text x="0" y="4" text-anchor="middle" fill="#6cd394" font-size="9" font-family="sans-serif">可选</text>
+      </g>
+      <g transform="translate(152 74)">
+        <circle r="30" fill="none" stroke="#7fb3ff" stroke-width="2"/>
+        <circle r="30" fill="none" stroke="#7fb3ff" stroke-width="7" opacity=".14"/>
+        <circle r="20" fill="none" stroke="#7fb3ff" stroke-width=".8" opacity=".6" stroke-dasharray="1 5"/>
+        <text x="0" y="4" text-anchor="middle" fill="#a8d0ff" font-size="9" font-family="sans-serif">纹章</text>
+      </g>
+      <g fill="#e8b339" opacity=".8"><circle cx="48" cy="26" r="1.6"/><circle cx="152" cy="122" r="1.4"/></g>
+    </svg></div>
+    <div class="meta"><div class="code">C02 / C05</div><div class="name">符文刻印环 · 三态状态环</div><div class="desc">金实环 / 绿虚线 / 蓝符文，语义固定；环必须落在多边形面内不出界。</div><span class="use">空间格 / 塔顶 / 切片选中</span></div>
+  </div>
+
+  <div class="item">
+    <div class="preview"><svg viewBox="0 0 200 158" aria-label="魔法星屑与烛焰火苗">
+      <defs>
+        <radialGradient id="c3r"><stop offset="0" stop-color="#ffd8e2" stop-opacity=".95"/><stop offset="1" stop-color="#7a2436" stop-opacity="0"/></radialGradient>
+        <radialGradient id="c3l"><stop offset="0" stop-color="#e6ffb8" stop-opacity=".9"/><stop offset="1" stop-color="#a8d84a" stop-opacity="0"/></radialGradient>
+        <radialGradient id="c3f"><stop offset="0" stop-color="#fff4ba"/><stop offset=".5" stop-color="#f6a02c"/><stop offset="1" stop-color="#b27a34" stop-opacity="0"/></radialGradient>
+      </defs>
+      <circle cx="68" cy="60" r="36" fill="url(#c3r)"/>
+      <circle cx="136" cy="66" r="34" fill="url(#c3l)"/>
+      <g fill="#e88fa3"><circle cx="54" cy="48" r="2"/><circle cx="80" cy="72" r="1.6"/><circle cx="62" cy="78" r="1.2"/><path d="M44 62 Q58 56 70 62" fill="none" stroke="#e88fa3" stroke-width="1" opacity=".7"/></g>
+      <g fill="#c8ec7a"><circle cx="130" cy="54" r="1.8"/><circle cx="148" cy="78" r="1.4"/><circle cx="126" cy="82" r="1.2"/><path d="M120 66 Q136 60 150 66" fill="none" stroke="#c8ec7a" stroke-width="1" opacity=".7"/></g>
+      <g transform="translate(100 112)">
+        <ellipse cx="0" cy="20" rx="22" ry="6" fill="#000" opacity=".4"/>
+        <circle cx="0" cy="0" r="24" fill="url(#c3f)" opacity=".55"/>
+        <path d="M0 12 Q-8 2 -3 -8 Q0 -14 0 -20 Q6 -10 7 -3 Q8 5 0 12 Z" fill="#f6a02c"/>
+        <path d="M0 9 Q-4 2 -1 -6 Q1 -10 1 -13 Q4 -6 4 -1 Q4 5 0 9 Z" fill="#fff4ba"/>
+        <rect x="-4" y="12" width="8" height="9" rx="2" fill="#d9c9a3"/>
+      </g>
+    </svg></div>
+    <div class="meta"><div class="code">C03 / C04</div><div class="name">魔法星屑 · 烛焰火苗</div><div class="desc">红宝石与青柠绿微粒、短弧拖尾；暖黄烛焰轻摇，均禁用 emoji。</div><span class="use">施法 / 升塔 / 容量标记</span></div>
+  </div>
+</div>
+
+<h2>04 / 道具与卡面</h2>
+<p class="sub">D 类。保留「打开的书」「双面药水瓶」「圆形法术面板」三个原作识别形制。</p>
+<div class="grid">
+
+  <div class="item">
+    <div class="preview"><svg viewBox="0 0 200 158" aria-label="打开的书移动卡">
+      <defs><linearGradient id="d1p" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e9d9b5"/><stop offset="1" stop-color="#c9b489"/></linearGradient></defs>
+      <ellipse cx="102" cy="132" rx="62" ry="8" fill="#000" opacity=".4"/>
+      <g transform="translate(2 4) rotate(-4 100 80)">
+        <path d="M100 46 L40 42 L34 112 L100 118 Z" fill="#a08a62"/>
+        <path d="M100 46 L160 42 L166 112 L100 118 Z" fill="#a08a62"/>
+        <path d="M100 48 L44 45 L39 108 L100 114 Z" fill="url(#d1p)"/>
+        <path d="M100 48 L156 45 L161 108 L100 114 Z" fill="url(#d1p)"/>
+        <path d="M100 48 V114" stroke="#8a734c" stroke-width="2"/>
+        <g stroke="#b09a70" stroke-width=".7" opacity=".8"><path d="M50 58 H94 M50 66 H94 M50 74 H86 M106 58 H150 M106 66 H150 M114 74 H150"/></g>
+        <g transform="translate(62 90)"><polygon points="0,-12 10,-6 10,10 -10,10 -10,-6" fill="#5c6270"/><rect x="-12" y="-16" width="5" height="5" fill="#8b98ae"/><rect x="-2" y="-16" width="5" height="5" fill="#8b98ae"/><rect x="8" y="-16" width="5" height="5" fill="#8b98ae"/></g>
+        <g transform="translate(138 88)"><path d="M0,-12 L8,10 L-8,10 Z" fill="#7a2436"/><circle cx="0" cy="-13" r="4" fill="#e88fa3"/></g>
+        <circle cx="47" cy="50" r="8" fill="#3b3f4a" stroke="#e8b339" stroke-width="1"/><text x="47" y="54" text-anchor="middle" fill="#f5e9c8" font-size="10" font-family="sans-serif">3</text>
+        <circle cx="153" cy="50" r="8" fill="#3b3f4a" stroke="#e8b339" stroke-width="1"/><text x="153" y="54" text-anchor="middle" fill="#f5e9c8" font-size="10" font-family="sans-serif">2</text>
+      </g>
+    </svg></div>
+    <div class="meta"><div class="code">D01</div><div class="name">实体移动卡（打开的书）</div><div class="desc">羊皮纸双页 + 可见厚度与投影，左页塔 / 右页巫师 + 角标步数，选中上浮金边。</div><span class="use">手牌区</span></div>
+  </div>
+
+  <div class="item">
+    <div class="preview"><svg viewBox="0 0 200 158" aria-label="药水瓶三态">
+      <defs><linearGradient id="d2g" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ffffff" stop-opacity=".28"/><stop offset=".35" stop-color="#ffffff" stop-opacity=".05"/><stop offset="1" stop-color="#ffffff" stop-opacity=".16"/></linearGradient></defs>
+      <ellipse cx="100" cy="132" rx="76" ry="7" fill="#000" opacity=".38"/>
+      <g transform="translate(48 0)">
+        <rect x="-8" y="46" width="16" height="7" rx="2" fill="#9a6a3f"/>
+        <rect x="-5" y="52" width="10" height="12" fill="#8fa0a8" opacity=".55"/>
+        <path d="M-16 64 Q-16 60 -10 60 H10 Q16 60 16 64 V112 Q16 122 6 122 H-6 Q-16 122 -16 112 Z" fill="#8fa0a8" opacity=".28" stroke="#b9ccd4" stroke-width="1.2"/>
+        <path d="M-14 108 H14 V112 Q14 120 6 120 H-6 Q-14 120 -14 112 Z" fill="#9aa8ae" opacity=".45"/>
+        <path d="M-16 64 Q-16 60 -10 60 H10 Q16 60 16 64 V112 Q16 122 6 122 H-6 Q-16 122 -16 112 Z" fill="url(#d2g)"/>
+      </g>
+      <g transform="translate(100 0)">
+        <rect x="-8" y="46" width="16" height="7" rx="2" fill="#9a6a3f"/>
+        <rect x="-5" y="52" width="10" height="12" fill="#8fa0a8" opacity=".55"/>
+        <path d="M-16 64 Q-16 60 -10 60 H10 Q16 60 16 64 V112 Q16 122 6 122 H-6 Q-16 122 -16 112 Z" fill="#8fa0a8" opacity=".25" stroke="#b9ccd4" stroke-width="1.2"/>
+        <path d="M-15 76 Q0 72 15 76 V112 Q15 121 6 121 H-6 Q-15 121 -15 112 Z" fill="#3498db" opacity=".85"/>
+        <path d="M-15 76 Q0 72 15 76" fill="none" stroke="#bfe2ff" stroke-width="1.4"/>
+        <circle cx="-5" cy="94" r="2" fill="#cdeaff" opacity=".7"/><circle cx="6" cy="104" r="1.5" fill="#cdeaff" opacity=".6"/>
+        <path d="M-16 64 Q-16 60 -10 60 H10 Q16 60 16 64 V112 Q16 122 6 122 H-6 Q-16 122 -16 112 Z" fill="url(#d2g)"/>
+        <circle cx="0" cy="96" r="22" fill="#3498db" opacity=".10"/>
+      </g>
+      <g transform="translate(152 0)" opacity=".62">
+        <rect x="-9" y="42" width="16" height="7" rx="2" fill="#6b4d31" transform="rotate(-18 -1 45)"/>
+        <rect x="-5" y="52" width="10" height="12" fill="#8fa0a8" opacity=".45"/>
+        <path d="M-16 64 Q-16 60 -10 60 H10 Q16 60 16 64 V112 Q16 122 6 122 H-6 Q-16 122 -16 112 Z" fill="#8fa0a8" opacity=".2" stroke="#9fb0b8" stroke-width="1.2"/>
+        <path d="M-8 84 L2 98 L-4 108" fill="none" stroke="#c8d2d6" stroke-width=".9" opacity=".7"/>
+      </g>
+      <g fill="#f5e9c8" font-size="9" font-family="sans-serif" text-anchor="middle" opacity=".7"><text x="48" y="146">空</text><text x="100" y="146">满</text><text x="152" y="146">已用</text></g>
+    </svg></div>
+    <div class="meta"><div class="code">D02</div><div class="name">药水瓶三态</div><div class="desc">矮圆玻璃瓶 + 木塞：透明灰液位 / 玩家色满液微光 / 暗淡开塞带裂纹；瓶型三态一致。</div><span class="use">药水区（仅当前玩家）</span></div>
+  </div>
+
+  <div class="item">
+    <div class="preview"><svg viewBox="0 0 200 158" aria-label="法术符文槽与木骰">
+      <defs><radialGradient id="d3g"><stop offset="0" stop-color="#3a4a63"/><stop offset="1" stop-color="#232833"/></radialGradient></defs>
+      <g transform="translate(76 76)">
+        <circle r="44" fill="url(#d3g)" stroke="#5b6472" stroke-width="3"/>
+        <circle r="44" fill="none" stroke="#7fb3ff" stroke-width="2" opacity=".55"/>
+        <circle r="36" fill="none" stroke="#7fb3ff" stroke-width=".8" opacity=".45" stroke-dasharray="2 5"/>
+        <path d="M-24 12 Q-10 4 4 10 Q18 16 26 6" fill="none" stroke="#7a8a76" stroke-width="3" opacity=".7"/>
+        <path d="M-14 4 L-6 -2 L2 4 L10 -3 L18 3" fill="none" stroke="#a8d84a" stroke-width="1.2" opacity=".8"/>
+        <path d="M8 -18 Q14 -24 20 -18 Q14 -16 8 -18" fill="#c9d6e6" opacity=".9"/>
+        <ellipse cx="-8" cy="20" rx="16" ry="3" fill="#7fb3ff" opacity=".18"/>
+        <circle cx="0" cy="0" r="44" fill="none" stroke="#7fb3ff" stroke-width="6" opacity=".10"/>
+      </g>
+      <g transform="translate(152 88) rotate(-12)">
+        <rect x="-20" y="-20" width="40" height="40" rx="7" fill="#9a6a3f" stroke="#c49a68" stroke-width="1.5"/>
+        <g fill="#43301e"><circle cx="-10" cy="-10" r="2.6"/><circle cx="10" cy="-10" r="2.6"/><circle cx="0" cy="0" r="2.6"/><circle cx="-10" cy="10" r="2.6"/><circle cx="10" cy="10" r="2.6"/></g>
+      </g>
+      <text x="76" y="140" text-anchor="middle" fill="#a8d0ff" font-size="9" font-family="sans-serif" opacity=".8">符文槽 · 可用时蓝辉</text>
+    </svg></div>
+    <div class="meta"><div class="code">D03 / D04</div><div class="name">法术符文槽 · 木质六面骰</div><div class="desc">圆形石凹槽内为悬浮岛屿与飞鸟剪影；木骰哑光刻痕，与米宝木质同源。</div><span class="use">法术区 / 随机步数</span></div>
+  </div>
+</div>
+
+<h2>05 / 场景、材质与界面装饰</h2>
+<p class="sub">E / F 类。材质统一哑光低反射；界面沿用石材与羊皮纸语汇。</p>
+<div class="grid">
+
+  <div class="item">
+    <div class="preview"><svg viewBox="0 0 200 158" aria-label="十六边形石板地块与环形轨道">
+      <defs><linearGradient id="e1t" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#565c68"/><stop offset="1" stop-color="#40454f"/></linearGradient></defs>
+      <ellipse cx="100" cy="86" rx="88" ry="46" fill="none" stroke="#4a5260" stroke-width="14" opacity=".55"/>
+      <ellipse cx="100" cy="86" rx="88" ry="46" fill="none" stroke="#7fb3ff" stroke-width="1" opacity=".3" stroke-dasharray="4 8"/>
+      <g transform="translate(100 84)">
+        <polygon points="0,-42 16,-39 30,-30 39,-16 42,0 39,16 30,30 16,39 0,42 -16,39 -30,30 -39,16 -42,0 -39,-16 -30,-30 -16,-39" fill="#2b303a" transform="translate(0 8)"/>
+        <polygon points="0,-42 16,-39 30,-30 39,-16 42,0 39,16 30,30 16,39 0,42 -16,39 -30,30 -39,16 -42,0 -39,-16 -30,-30 -16,-39" fill="url(#e1t)" stroke="#6c7482" stroke-width="1.2"/>
+        <polygon points="0,-33 12,-30 23,-23 30,-12 33,0 30,12 23,23 12,30 0,33 -12,30 -23,23 -30,12 -33,0 -30,-12 -23,-23 -12,-30" fill="none" stroke="#7fb3ff" stroke-width="1" opacity=".55"/>
+        <path d="M-24 -6 L-10 4 L2 -8 M14 20 L24 10" fill="none" stroke="#20242c" stroke-width="1" opacity=".6"/>
+        <g transform="translate(-20 -18)"><circle r="7" fill="#224d82" stroke="#7fb3ff" stroke-width="1"/><path d="M-4 1 L-1 -2 L0 0 L1 -2 L4 1 L1 1 L0 4 L-1 1 Z" fill="#0f1420"/></g>
+        <g transform="translate(20 18)"><ellipse rx="4" ry="6" fill="#f6a02c" opacity=".9"/><ellipse rx="9" ry="12" fill="#f6a02c" opacity=".18"/></g>
+      </g>
+    </svg></div>
+    <div class="meta"><div class="code">E01 / E02</div><div class="name">十六边形石板地块 · 悬浮环轨</div><div class="desc">暗石厚台边边贴合成环，内嵌蓝符文刻线；圆形底座浮于云雾，远景不抢主体。</div><span class="use">16 空间格 / 舞台底层</span></div>
+  </div>
+
+  <div class="item">
+    <div class="preview"><svg viewBox="0 0 200 158" aria-label="羊皮卷轴面板与石雕角饰">
+      <defs><linearGradient id="f2p" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2c303b"/><stop offset="1" stop-color="#1c202a"/></linearGradient></defs>
+      <rect x="26" y="30" width="148" height="98" rx="8" fill="#12151c" opacity=".7"/>
+      <rect x="30" y="26" width="140" height="98" rx="7" fill="url(#f2p)" stroke="#7a6c50" stroke-width="1.4"/>
+      <rect x="30" y="26" width="140" height="22" rx="7" fill="#3b3f4a" opacity=".85"/>
+      <g fill="#c9b489">
+        <path d="M30 33 h20 v3 h-17 v9 h-3 Z"/><path d="M170 33 h-20 v3 h17 v9 h3 Z"/>
+        <path d="M30 117 h20 v-3 h-17 v-9 h-3 Z"/><path d="M170 117 h-20 v-3 h17 v-9 h3 Z"/>
+      </g>
+      <rect x="40" y="58" width="120" height="1" fill="#7a6c50" opacity=".6"/>
+      <g fill="#d9c9a3" opacity=".55"><rect x="40" y="68" width="72" height="5" rx="2"/><rect x="40" y="80" width="96" height="5" rx="2"/><rect x="40" y="92" width="58" height="5" rx="2"/></g>
+      <g transform="translate(146 92)"><rect x="-13" y="-13" width="26" height="26" rx="5" fill="#3b3f4a" stroke="#e8b339" stroke-width="1.2"/><path d="M-6 -5 H6 M-6 0 H6 M-6 5 H3" stroke="#f5e9c8" stroke-width="1.2" opacity=".8"/></g>
+      <text x="100" y="41" text-anchor="middle" fill="#f5e9c8" font-size="10" font-family="sans-serif" letter-spacing="1">卷轴面板</text>
+    </svg></div>
+    <div class="meta"><div class="code">F02 / F03 / F05</div><div class="name">羊皮卷轴面板 · 石雕角饰</div><div class="desc">藏宝图式纸质底板 + 卷边石角、细石分割线，右下卷轴角标可展开浮层。</div><span class="use">右侧栏四区 / 浮层 / 日志</span></div>
+  </div>
+
+  <div class="item">
+    <div class="preview"><svg viewBox="0 0 200 158" aria-label="双层玩家色发光外框与状态徽记">
+      <defs><linearGradient id="f1g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e74c3c" stop-opacity=".55"/><stop offset=".5" stop-color="#e74c3c" stop-opacity="0"/><stop offset="1" stop-color="#e74c3c" stop-opacity=".45"/></linearGradient></defs>
+      <rect x="20" y="22" width="160" height="114" rx="12" fill="#14161c" stroke="url(#f1g)" stroke-width="5"/>
+      <rect x="30" y="32" width="140" height="94" rx="8" fill="#1a1d24" stroke="#e74c3c" stroke-width="1.2" opacity=".8"/>
+      <g transform="translate(0 -6)">
+        <rect x="40" y="46" width="120" height="18" rx="4" fill="#23262f" stroke="#3b3f4a" stroke-width="1"/>
+        <g><circle cx="52" cy="55" r="5" fill="#e74c3c"/><circle cx="72" cy="55" r="5" fill="#3498db"/><circle cx="92" cy="55" r="5" fill="#27ae60"/><circle cx="112" cy="55" r="5" fill="#f1c40f"/><circle cx="132" cy="55" r="5" fill="#9b59b6"/><circle cx="152" cy="55" r="5" fill="#e67e22"/></g>
+      </g>
+      <g transform="translate(0 4)">
+        <rect x="40" y="80" width="34" height="32" rx="4" fill="#2b3440" stroke="#e8b339" stroke-width="1.4"/>
+        <rect x="82" y="80" width="34" height="32" rx="4" fill="#2b3440" stroke="#27ae60" stroke-width="1.2" stroke-dasharray="4 3"/>
+        <rect x="124" y="80" width="34" height="32" rx="4" fill="#2b3440" stroke="#4a505c" stroke-width="1.2" opacity=".55"/>
+      </g>
+      <text x="100" y="76" text-anchor="middle" fill="#f5e9c8" font-size="9" font-family="sans-serif" opacity=".65">当前轮次 · 200ms 过渡</text>
+    </svg></div>
+    <div class="meta"><div class="code">F01 / F04 / F06</div><div class="name">双层发光外框 · 侧栏容器组</div><div class="desc">页面内阴影 + 舞台外发光随当前玩家色切换，终局熄灭；四区共用石框与节奏。</div><span class="use">全局 / 玩家条 / 状态徽记</span></div>
+  </div>
+</div>
+
+<h2>06 / 材质样本</h2>
+<p class="sub">全部哑光低反射；禁用镜面高光、塑料感、霓虹渐变。</p>
+<div class="mats">
+  <div class="mat"><i class="stone-tex"></i><b>粗凿石板</b></div>
+  <div class="mat"><i class="paper-tex"></i><b>羊皮 / 纸板纤维</b></div>
+  <div class="mat"><i class="wood-tex"></i><b>哑光木质米宝</b></div>
+  <div class="mat"><i class="glass-tex"></i><b>半透玻璃药瓶</b></div>
+  <div class="mat"><i class="metal-tex"></i><b>哑光金属描边</b></div>
+</div>
+
+<h2>07 / 风格一致性约束速查</h2>
+<p class="sub">所有条目强制遵守，供后续样式优化逐项核对。</p>
+<div class="rules">
+  <ol>
+    <li><b>一套几何</b>：八 / 十六边形平台 + 锥台；禁止圆球塔、哥特尖塔、机械结构。</li>
+    <li><b>一套光照</b>：55° 固定斜俯、暖烛主光 + 冷蓝补光 + 金选中辉光；侧面不得纯黑。</li>
+    <li><b>一套材质</b>：哑光石 / 纸 / 木 / 玻璃；镜面、塑料、霓虹一律不用。</li>
+    <li><b>核心资产</b>：禁 emoji、纯色矩形、黑色占位块；纹章只用 C01 渡鸦蓝圆徽。</li>
+    <li><b>点缀层</b>：酒红袍、青柠魔光、云雾蓝不得改写台面暗烛光基调。</li>
+    <li><b>辨识锚点</b>：可叠矮塔、蓝渡鸦盾、尖帽米宝、药水瓶、打开的书卡牌、升腾悬浮，缺一即失辨识度。</li>
+    <li><b>不越界</b>：素材只服务视觉，不改变点击语义、层级排序、信息可见性与 6 巫师 / 9 层塔比例基准。</li>
+  </ol>
+</div>
+
+<footer>
+  <span>完整编号目录与逐项约束见 <b>docs/visual-assets/README.md</b>　·　仅视觉素材，不含实现步骤</span>
+  <span>参考图仅作风格提炼　·　v1 平面板保留　|　2026-11-07</span>
+</footer>
+
+</div>
+</body>
+</html>

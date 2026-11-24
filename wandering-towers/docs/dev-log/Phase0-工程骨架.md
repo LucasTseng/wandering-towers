@@ -11,7 +11,7 @@
 - `pnpm -r typecheck` —— shared/engine/server/client 全部 Done
 - `pnpm test` —— 13/13 通过（init + 不变量）
 - `pnpm lint` —— 0 error（13 warning，均为 `import()` 类型注解风格，非阻塞）
-- `pnpm dev` —— Vite 启动，http://localhost:5173 返回 HTTP 200
+- `pnpm dev` —— Vite 启动，http://localhost:8008 返回 HTTP 200
 
 ## 任务进度
 | 任务 | 状态 | 关键产出 |
