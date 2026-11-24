@@ -5,6 +5,8 @@ import { createTextureLibrary, mulberry32 } from './textures';
 import type { TextureLibrary } from './textures';
 import { createMaterials } from './materials';
 import type { MaterialLibrary, PhotoStone } from './materials';
+import { CardLayer } from './cardLayer';
+import type { CardMode, CardView, PotionView } from './cardLayer';
 import { createEnvironment, updateEnvironment } from './environment';
 import type { EnvironmentRuntime } from './environment';
 import {
@@ -93,6 +95,14 @@ export class TowerScene {
   private animationActive = false;
   private disposed = false;
 
+  private cardLayer: CardLayer | null = null;
+  private lastElapsed = 0;
+  /** 卡牌点击回调由 React 层注入；回放（只读）时不会触发 */
+  onCardClick: ((id: string) => void) | null = null;
+  /** 卡牌悬停变化（用于「悬停法术牌堆展开」） */
+  onCardHover: ((id: string | null) => void) | null = null;
+  private lastHoverId: string | null = null;
+
   private static readonly CELL_COUNT = 16;
 
   constructor(options: SceneOptions) {
@@ -136,6 +146,9 @@ export class TowerScene {
 
     this.pieceRoot.name = 'pieces';
     this.scene.add(this.pieceRoot);
+
+    this.cardLayer = new CardLayer(this.camera, this.stage, this.reducedMotion);
+    this.cardLayer.attach(this.scene);
 
     this.createSelection();
     this.bindInput();
@@ -468,7 +481,34 @@ export class TowerScene {
   /** 只读模式（回放）：禁止拾取，并在切进来时清空选中 */
   setReadOnly(value: boolean): void {
     this.readOnly = value;
+    this.cardLayer?.setEnabled(!value);
     if (value) this.hideEntity();
+  }
+
+  // ---------- 纵深卡牌层 ----------
+  setCards(
+    hand: readonly CardView[],
+    spells: readonly CardView[],
+    mode: CardMode,
+    selectedId: string | null,
+    targetingId: string | null = null,
+  ): void {
+    this.cardLayer?.setData(hand, spells, mode, selectedId, targetingId);
+    this.cardLayer?.setEnabled(!this.readOnly);
+  }
+
+  /** 右上角漂浮魔法瓶 */
+  setPotions(list: readonly PotionView[]): void {
+    this.cardLayer?.setPotions(list);
+  }
+
+  /** 卡牌在舞台内的屏幕坐标（供 DOM 浮层贴靠） */
+  getCardAnchor(id: string): { x: number; y: number; h: number } | null {
+    return this.cardLayer?.anchor(id) ?? null;
+  }
+
+  burstCard(id: string, color: string, count = 22): void {
+    this.cardLayer?.burst(id, color, count);
   }
 
   /** 供只读模式（回放）强制清空选中：不依赖 cells 是否变化 */
@@ -515,6 +555,7 @@ export class TowerScene {
 
   private onPointerDown = (event: PointerEvent): void => {
     if (event.button !== 0 || (event.target as HTMLElement).closest('button')) return;
+    this.cardLayer?.setHover(null);
     this.pointerDrag = {
       x: event.clientX,
       y: event.clientY,
@@ -539,7 +580,13 @@ export class TowerScene {
     if (this.hoverFrame) return;
     this.hoverFrame = requestAnimationFrame(() => {
       this.hoverFrame = 0;
-      this.stage.style.cursor = this.pickAt(event) ? 'pointer' : 'grab';
+      const cardId = this.cardAt(event);
+      this.cardLayer?.setHover(cardId);
+      if (cardId !== this.lastHoverId) {
+        this.lastHoverId = cardId;
+        this.onCardHover?.(cardId);
+      }
+      this.stage.style.cursor = cardId || this.pickAt(event) ? 'pointer' : 'grab';
     });
   };
 
@@ -550,6 +597,14 @@ export class TowerScene {
     this.stage.classList.remove('is-dragging');
     this.stage.style.cursor = 'grab';
     if (!wasClick) return;
+
+    const cardId = this.cardAt(event);
+    if (cardId) {
+      this.hideEntity();
+      this.cardLayer?.burst(cardId, '#e4b95f', 18);
+      this.onCardClick?.(cardId);
+      return;
+    }
 
     const picked = this.pickAt(event);
     if (!picked) {
@@ -592,6 +647,22 @@ export class TowerScene {
     this.pointerNdc.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     this.pointerNdc.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
     return rect;
+  }
+
+  /** 卡牌命中：优先于棋盘，回放时一律返回 null */
+  private cardAt(event: PointerEvent | MouseEvent): string | null {
+    if (this.readOnly || !this.cardLayer) return null;
+    const rect = this.pointerToNdc(event);
+    if (
+      event.clientX < rect.left ||
+      event.clientX > rect.right ||
+      event.clientY < rect.top ||
+      event.clientY > rect.bottom
+    ) {
+      return null;
+    }
+    this.raycaster.setFromCamera(this.pointerNdc, this.camera);
+    return this.cardLayer.pick(this.raycaster);
   }
 
   private pickAt(event: PointerEvent | MouseEvent): THREE.Object3D | null {
@@ -670,6 +741,9 @@ export class TowerScene {
 
     updateEnvironment(this.env, elapsed, this.reducedMotion);
     this.animatePieces(elapsed);
+    const dt = Math.min(0.05, Math.max(0, elapsed - this.lastElapsed));
+    this.lastElapsed = elapsed;
+    this.cardLayer?.update(dt);
 
     if (this.selectionRing) {
       (this.selectionRing.material as THREE.MeshBasicMaterial).opacity = 0.65 + Math.sin(elapsed * 2.1) * 0.18;
@@ -755,6 +829,8 @@ export class TowerScene {
     this.disposed = true;
     this.animationActive = false;
     this.renderer.setAnimationLoop(null);
+    this.cardLayer?.dispose();
+    this.cardLayer = null;
 
     this.stage.removeEventListener('pointerdown', this.onPointerDown);
     this.stage.removeEventListener('pointermove', this.onPointerMove);

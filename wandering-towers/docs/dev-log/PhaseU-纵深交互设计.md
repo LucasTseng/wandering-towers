@@ -1,7 +1,7 @@
 # Phase U · 纵深交互与 UI 重构（设计阶段）
 
 > 日期：2026-11-24
-> 状态：**设计定稿，原型已验收；代码未落进 `packages/client`**
+> 状态：**P1 + P2 + P3 已实施（2026-11-24）**
 > 方案主文档：[architecture/08-UI纵深交互方案.md](../architecture/08-UI纵深交互方案.md)
 > 原型：[docs/prototypes/depth-ui-demo.html](../prototypes/depth-ui-demo.html)
 
@@ -90,11 +90,126 @@
 
 ---
 
+## 6.1 实施记录（2026-11-24）
+
+### 新增文件
+
+| 文件 | 行数 | 职责 |
+| --- | --- | --- |
+| `src/scene/cardLayer.ts` | ~780 | 3D 卡面绘制、槽位补间、悬停/选中态、双层魔法阵、粒子迸发、屏幕锚点 |
+
+### 修改文件
+
+| 文件 | 改动 |
+| --- | --- |
+| `src/scene/SceneController.ts` | 创建 CardLayer、卡牌命中优先于棋盘、悬停回调、独立 dt 计算、只读禁用、dispose |
+| `src/components/ThreeStage.tsx` | 新增 hand/spells/cardsMode/onCardSelect/onCardHover/popover 属性；浮层每帧跟随卡牌锚点 |
+| `src/containers/ThreeGameContainer.tsx` | 手牌/法术视图模型、悬停展开法术、点击路由、移除 HandPanel/SpellPanel、`?uipreview` 预览 |
+| `src/styles/three.css` | 字号上调 13 处、`.card-popover` 浮层、`.card-layer-canvas` 图层、侧栏宽度 340→306 |
+
+### 关键技术决策
+
+1. **独立画布**：卡牌画在与主场景分离的透明 canvas 上（z-index 4）。原因是 `.stage-mist`（白色雾气，透明度 0.46）与 `.stage-vignette` 覆盖在画布之上，若卡牌画在主场景里会被冲淡到几乎看不清。独立画布同时解决了「卡牌永远在场景之上」的层级问题。
+2. **关闭色调映射**：卡牌层用 `NoToneMapping` + `toneMapped:false`，保证卡面颜色与 canvas 绘制一致，不受场景曝光 0.78 影响。
+3. **修正特异性**：`.stage canvas { z-index:1 }` 会压过 `.card-layer-canvas { z-index:4 }`，必须写成 `.stage canvas.card-layer-canvas`。
+4. **受控展开**：法术牌堆的展开状态由 React 持有（`spellsOpen`），悬停进入置 true、离开 520ms 后置 false，避免 3D 层自己维护 UI 状态。
+
+### 验证
+
+- `pnpm --filter @wt/client typecheck` ✅
+- `pnpm --filter @wt/client build` ✅（791 kB / gzip 223 kB）
+- `pnpm test` ✅ 8 文件 89 用例全绿
+- `pnpm lint` ✅ 0 error（16 条历史 warning）
+- 截图核对：默认态、选牌态（塔牌 / 二选一牌）、法术展开态，均无出画与遮挡
+
+## 6.2 P3 实施记录（2026-11-24）
+
+### 结构变化
+
+- 删除 `aside.sidebar` 整块；`main-layout` 由 grid 改 flex，舞台独占整宽。
+- 左上铭牌合并「第 N 轮 · 行动 N / 2 · 阶段」；删除原 `turn-panel`。
+- 右上新增 `.hud-status` 玩家状态卡（头像色点 / 玩家名 / 目标 / 进度条 / 四类计数）。
+- 顶部居中 `.hud-top-center`：错误优先，其次无 cardId 的意图条。
+- 右下 `.hud-endturn`；相机控制移到左下；回放面板 `.replay-dock` 浮动停靠右侧。
+
+### 魔法瓶
+
+- `cardLayer.ts` 新增 `setPotions()` 与 `paintBottle()`：6 个瓶子按 NDC 排在状态卡下方。
+- 三态：`FULL`（液体渐变 + 液面椭圆 + 气泡 + 高光）/ `EMPTY`（仅玻璃与残液）/ `SPENT`（木塞歪斜 + 裂纹）。
+- 玻璃横向渐变实现「边缘实、中心透」，空瓶可透出背景。
+
+### 两个踩坑
+
+1. **布局塌陷**：`main-layout` 由 grid 改 block 后，`.stage-wrap` 因无内容高度归零，舞台空白。改为 `display:flex` + `.stage-wrap{flex:1}` 解决。
+2. **卡面被噪点层混合**：`.stage-grain` 是 `z-index:4` + `mix-blend-mode:soft-light`，卡牌画布同为 4 时被它混合成灰白。卡牌层改为 `z-index:6`（低于 HUD 的 8）后恢复清晰。
+
+### 验证
+
+- typecheck / build ✅（791 kB，gzip 223 kB）
+- test ✅ 89 例
+- 截图核对：默认态、选牌浮层、满瓶/空瓶（`?uipreview=potion`）
+
+## 6.3 骰点锁定与瓶型修订（2026-11-24）
+
+### 修复的漏洞
+
+原实现里骰点只存在于 `UIIntent` 中，取消或改选卡牌后意图被重置，重新点同一张牌会再掷一次 —— 等于可以无限重掷。
+
+修法：
+- 新增 `lockedRollRef: Map<CardID, {value, mode}>`，掷骰即写入；
+- `handleCardClick` 先查表：同牌恢复锁定态、异牌直接拒绝；
+- 结束回合在锁定时拒绝；
+- 成功出牌 / 直接打出后释放。
+
+### 强制走完
+
+锁定后「取消」按钮消失，替换为「直接打出（放弃移动）」。实现上向引擎传一个必然无效的目标 id：
+- 巫师模式 → `isOwnVisibleWizard` 为假 → `advanceOrEndTurn`；
+- 塔模式 → `moveTowerSegment` 抛 `INVALID_TOWER_TARGET` → `isTowerIllegalTarget` 捕获 → `advanceOrEndTurn`。
+
+两条路径都是引擎既有的「非法目标 = 行动消耗」（V2 §20.1），因此不需要改规则。
+
+### 瓶型
+
+试管型改为圆肚药剂瓶：细颈 + 球形瓶身 + 软木塞 + 封蜡；尺寸缩到 0.54×0.9，右对齐排在状态卡下方。
+
+## 6.4 命中区域修订（2026-11-24）
+
+反馈：卡牌周边的魔法光效会挡住「选巫师 / 选塔」，且悬停到光效上卡牌就浮起。
+
+成因：`CardLayer.pick()` 用 `intersectObjects(roots, true)` 递归检测，假定了「卡牌组里只有卡面」；
+但 `aura`（1.72×卡宽）与 `auraGold`（1.86×卡宽）都是同组的平面网格，射线会先撞到它们的矩形外框。
+注意这些平面是带透明通道的贴图，射线检测不看 alpha，整块矩形都算命中。
+
+修法：
+- 两个光效网格 `raycast = () => {}`（装饰对象永久退出检测）；
+- `pick()` 改为只对 `runtime.face` 求交，`recursive = false`，并保持按距离取最近的一张。
+
+代价：悬停判定从「卡+光晕」收紧为「仅卡面」，鼠标移出卡边 1px 卡牌就落回 —— 这正是期望语义。
+
+## 6.5 选目标态主卡让位（2026-11-24）
+
+反馈：走到「点巫师 / 点塔」这一步时，主卡正好压在棋盘中央，最需要点的位置被挡住。
+
+改动：
+- `cardLayer.ts`：新增 `TARGET_SLOT = S(-0.5, -0.54, 12.9, { s: 0.78, tilt: 0.1, fan: 0.05 })`
+  与 `TARGET_OUT_SLOTS`（其余手牌退到左右下角，透明度 0.18–0.26）；`setData()` 增加 `targetingId`。
+- `SceneController.setCards()` 透传 `targetingId`。
+- `ThreeStage`：新增 `targetingCardId` 属性，浮层按 `is-side` 走「卡右侧」定位分支。
+- `ThreeGameContainer`：`targetingCardId` 只在 `PLAY_CARD_WIZARD` / `PLAY_CARD_TOWER_PICK` 时非空。
+- `three.css`：`.card-popover.is-side`（宽 300、origin 左中、箭头朝左）。
+
+调参过程：首版把其余手牌推到 `ny -0.86 ~ -0.92`，实测在 1000×700 下几乎沉出画面；
+改为左右下角 `-0.58 ~ -0.74` 后可见但仍保持次要。主卡也从 `-0.44,-0.50` 再退到 `-0.50,-0.54`，少压一格塔位。
+
+预览：`?uipreview=target` 会自动选一张不走掷骰的单用途牌，直接进入选目标态。
+
 ## 7. 尚未完成 / 下一步
 
-- [ ] P1：手牌迁到前沿 + 卡下浮层 + 字号上调（未开始）
-- [ ] P2：法术牌堆交换（未开始）
-- [ ] P3：侧栏拆解入四角 HUD、删除侧栏（未开始）
+- [x] P1：手牌迁到前沿 + 卡下浮层 + 字号上调
+- [x] P2：法术牌堆交换
+- [x] P3：删除侧栏、四角 HUD、漂浮魔法瓶
+
 - [ ] 无障碍镜像层（视觉隐藏的 DOM 按钮）设计未完成
 - [ ] 移动端降级方案（底部卡带）未验证
 - [ ] 回放面板 `ReplayPanel` 在无侧栏结构下的落位未设计

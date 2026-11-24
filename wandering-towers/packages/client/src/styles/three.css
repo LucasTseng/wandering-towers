@@ -174,13 +174,11 @@ button { color: inherit; }
   flex: 1;
   min-height: 0;
   min-width: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
-  gap: 14px;
+  display: flex;
   padding: 14px;
 }
 
-.stage-wrap { min-width: 0; min-height: 0; position: relative; }
+.stage-wrap { flex: 1; min-width: 0; min-height: 0; position: relative; }
 
 .stage {
   position: absolute;
@@ -355,8 +353,8 @@ button { color: inherit; }
 
 .camera-controls {
   position: absolute;
-  right: 14px;
-  bottom: 44px;
+  left: 16px;
+  bottom: 74px;
   z-index: 10;
   display: flex;
   flex-direction: column;
@@ -382,7 +380,7 @@ button { color: inherit; }
 .stage-bottom {
   position: absolute;
   left: 16px;
-  right: 16px;
+  right: 176px;
   bottom: 13px;
   display: flex;
   align-items: flex-end;
@@ -530,8 +528,8 @@ button { color: inherit; }
   border-bottom: 1px solid rgba(139, 109, 63, 0.25);
 }
 .panel-icon { width: 14px; height: 14px; flex: 0 0 auto; color: #8a724a; }
-.panel-title { font-family: var(--serif); font-size: 11px; font-weight: 600; letter-spacing: 1px; color: #504a39; }
-.panel-meta { margin-left: auto; color: #91836a; font-size: 8px; letter-spacing: 0.4px; white-space: nowrap; }
+.panel-title { font-family: var(--serif); font-size: 13px; font-weight: 600; letter-spacing: 1px; color: #504a39; }
+.panel-meta { margin-left: auto; color: #91836a; font-size: 11px; letter-spacing: 0.4px; white-space: nowrap; }
 .panel-meta strong { color: #7d5d2d; font-weight: 600; }
 
 .player-summary { display: flex; align-items: center; gap: 10px; }
@@ -547,9 +545,9 @@ button { color: inherit; }
 .player-medallion .shield-bg { position: absolute; inset: 0; }
 .player-medallion .wizard-mark { position: relative; z-index: 1; width: 22px; height: 29px; margin-top: 3px; }
 .player-copy { flex: 1; min-width: 0; }
-.player-overline { color: #9a8665; font-size: 7px; letter-spacing: 1.6px; }
-.player-name { margin-top: 1px; font-family: var(--serif); font-size: 14px; font-weight: 600; letter-spacing: 0.8px; color: #55452e; }
-.player-state { margin-top: 2px; color: #897b63; font-size: 8px; }
+.player-overline { color: #9a8665; font-size: 10px; letter-spacing: 1.6px; }
+.player-name { margin-top: 1px; font-family: var(--serif); font-size: 16px; font-weight: 600; letter-spacing: 0.8px; color: #55452e; }
+.player-state { margin-top: 2px; color: #897b63; font-size: 11px; }
 .progress-line {
   position: relative;
   height: 5px;
@@ -560,7 +558,7 @@ button { color: inherit; }
   box-shadow: inset 0 1px 2px rgba(91, 70, 44, 0.1);
 }
 .progress-fill { height: 100%; border-radius: inherit; box-shadow: 0 0 5px rgba(180, 90, 47, 0.25); transition: width 260ms ease; }
-.progress-markers { position: relative; display: flex; justify-content: space-between; margin-top: 3px; color: #9b8a6d; font-size: 7px; }
+.progress-markers { position: relative; display: flex; justify-content: space-between; margin-top: 3px; color: #9b8a6d; font-size: 10px; }
 .player-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .stat-tag {
   display: inline-flex;
@@ -571,7 +569,7 @@ button { color: inherit; }
   border-radius: 999px;
   background: rgba(255, 249, 228, 0.45);
   color: #7b6d52;
-  font-size: 7px;
+  font-size: 10px;
   white-space: nowrap;
 }
 .stat-dot { width: 5px; height: 5px; border-radius: 50%; background: #b88231; }
@@ -681,9 +679,9 @@ button { color: inherit; }
 .potion-row { display: flex; justify-content: space-between; gap: 2px; padding: 1px 0 3px; }
 .potion-unit { width: 34px; text-align: center; }
 .potion-unit svg { display: block; width: 32px; height: 54px; margin: 0 auto; overflow: visible; filter: drop-shadow(0 2px 2px rgba(65, 57, 38, 0.1)); }
-.potion-state { margin-top: 1px; color: #938368; font-size: 7px; letter-spacing: 0.3px; }
+.potion-state { margin-top: 1px; color: #938368; font-size: 10px; letter-spacing: 0.3px; }
 .potion-state.is-full { color: #a04d37; }
-.potion-note { margin-top: 3px; padding-top: 4px; border-top: 1px solid rgba(140, 109, 64, 0.18); color: #8a7c65; font-size: 7.5px; line-height: 1.5; }
+.potion-note { margin-top: 3px; padding-top: 4px; border-top: 1px solid rgba(140, 109, 64, 0.18); color: #8a7c65; font-size: 11px; line-height: 1.5; }
 
 /* 法术 */
 .spell-list { display: flex; flex-direction: column; gap: 5px; }
@@ -736,7 +734,7 @@ button { color: inherit; }
 }
 .end-turn:hover { background: linear-gradient(180deg, rgba(255, 252, 226, 0.75), transparent 45%), linear-gradient(90deg, #d0a454, #e5bf6e 50%, #c89445); }
 .end-turn svg { width: 15px; height: 15px; }
-.demo-footnote { padding: 1px 5px 3px; color: #81887a; font-size: 7.5px; line-height: 1.55; text-align: center; letter-spacing: 0.2px; }
+.demo-footnote { padding: 1px 5px 3px; color: #81887a; font-size: 10px; line-height: 1.55; text-align: center; letter-spacing: 0.2px; }
 
 /* ---------------- 操作提示条 ---------------- */
 .intent-banner {
@@ -748,7 +746,7 @@ button { color: inherit; }
     radial-gradient(ellipse at 10% 0%, rgba(255, 252, 235, 0.7), transparent 60%),
     linear-gradient(135deg, rgba(247, 235, 203, 0.96), rgba(228, 210, 169, 0.96));
   color: #564a33;
-  font-size: 10px;
+  font-size: 12.5px;
   line-height: 1.45;
   display: flex;
   align-items: center;
@@ -764,7 +762,7 @@ button { color: inherit; }
   border-radius: 5px;
   background: linear-gradient(180deg, rgba(255, 251, 233, 0.9), rgba(230, 214, 174, 0.9));
   color: #5c4d33;
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.4px;
   cursor: pointer;
   white-space: nowrap;
@@ -797,7 +795,7 @@ button { color: inherit; }
   border-radius: 6px;
   background: linear-gradient(135deg, rgba(252, 235, 219, 0.95), rgba(240, 210, 186, 0.95));
   color: #8a3a26;
-  font-size: 10px;
+  font-size: 12px;
   box-shadow: 0 2px 0 rgba(150, 96, 70, 0.18);
 }
 
@@ -919,7 +917,7 @@ button { color: inherit; }
   .topbar { min-height: 58px; padding: 6px 15px; }
   .brand-crest { width: 37px; height: 41px; }
   .brand-title { font-size: 20px; }
-  .main-layout { padding: 10px; gap: 10px; grid-template-columns: minmax(0, 1fr) 326px; }
+  .main-layout { padding: 10px; }
   .sidebar { gap: 6px; }
   .va-panel { padding: 7px 9px 8px; }
   .panel-head { margin-bottom: 5px; padding-bottom: 5px; }
@@ -1175,4 +1173,234 @@ button { color: inherit; }
 
 @media (max-width: 900px) {
   .replay-stream { max-height: 200px; }
+}
+
+/* ---------------- 纵深卡牌：贴卡浮层（Phase U） ---------------- */
+.card-popover {
+  position: absolute;
+  z-index: 26;
+  width: 272px;
+  opacity: 0;
+  pointer-events: auto;
+  transform: translateY(4px) scale(0.96);
+  transform-origin: 50% 0;
+  transition: opacity 0.2s ease, transform 0.26s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+  filter: drop-shadow(0 16px 28px rgba(18, 30, 26, 0.34));
+}
+.card-popover::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  margin-left: -8px;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-bottom: 9px solid rgba(164, 136, 86, 0.85);
+}
+.card-popover .intent-banner {
+  margin-bottom: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 11px 12px 12px;
+  border-radius: 10px;
+  border-color: rgba(164, 136, 86, 0.7);
+  box-shadow: inset 0 1px rgba(255, 255, 244, 0.75), inset 0 0 0 3px rgba(196, 148, 61, 0.12);
+}
+.card-popover .intent-banner .intent-text {
+  flex: none;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.card-popover .intent-banner .mini-button {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 13px;
+  border-radius: 7px;
+}
+.card-popover .intent-banner .dice-button {
+  width: 46px;
+  height: 46px;
+  align-self: center;
+  font-size: 20px;
+}
+
+
+/* 卡牌独立图层：压过雾气与调色，但仍低于 HUD */
+.stage canvas.card-layer-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* ---------------- 舞台内 HUD（无侧栏布局） ---------------- */
+.hud-plaque {
+  position: absolute;
+  left: 18px;
+  top: 16px;
+  padding: 9px 14px 10px 16px;
+  min-width: 216px;
+  border: 1px solid rgba(79, 105, 92, 0.26);
+  border-radius: 10px;
+  background: linear-gradient(178deg, rgba(251, 241, 213, 0.94), rgba(233, 219, 187, 0.92));
+  box-shadow: 0 10px 24px rgba(28, 46, 42, 0.22), inset 0 1px rgba(255, 253, 240, 0.7);
+  backdrop-filter: blur(5px);
+}
+.hud-round {
+  margin-top: 4px;
+  font-family: var(--serif);
+  font-size: 13px;
+  letter-spacing: 0.6px;
+  color: #6d5a35;
+}
+.hud-round strong { color: #8a6327; font-size: 15px; }
+.hud-phase {
+  margin-top: 2px;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: #7f8a76;
+}
+
+.hud-top-center {
+  position: absolute;
+  left: 50%;
+  top: 16px;
+  transform: translateX(-50%);
+  width: min(520px, calc(100% - 520px));
+  min-width: 300px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+}
+.hud-top-center > * { pointer-events: auto; }
+.hud-top-center .intent-banner { margin-bottom: 0; width: 100%; }
+
+.hud-alert {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  padding: 8px 12px;
+  border: 1px solid rgba(166, 82, 60, 0.55);
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(252, 235, 219, 0.96), rgba(240, 210, 186, 0.96));
+  color: #8a3a26;
+  font-size: 12px;
+  line-height: 1.5;
+  box-shadow: 0 10px 24px rgba(40, 24, 18, 0.24);
+}
+.hud-alert .mini-button { flex: 0 0 auto; }
+
+.hud-status {
+  position: absolute;
+  right: 18px;
+  top: 16px;
+  width: 236px;
+  padding: 10px 12px 11px;
+  border: 1px solid rgba(79, 105, 92, 0.26);
+  border-radius: 10px;
+  background: linear-gradient(178deg, rgba(251, 241, 213, 0.94), rgba(233, 219, 187, 0.92));
+  box-shadow: 0 10px 24px rgba(28, 46, 42, 0.22), inset 0 1px rgba(255, 253, 240, 0.7);
+  backdrop-filter: blur(5px);
+}
+.hud-status-head { display: flex; align-items: center; gap: 9px; }
+.hud-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 252, 236, 0.85);
+  box-shadow: 0 0 0 2px rgba(196, 148, 61, 0.35), inset 0 -6px 10px rgba(0, 0, 0, 0.22);
+  flex: 0 0 auto;
+}
+.hud-status-copy { min-width: 0; }
+.hud-player {
+  font-family: var(--serif);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: #4f4127;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hud-goal { margin-top: 1px; font-size: 11px; color: #7d7458; }
+.hud-progress {
+  margin-top: 8px;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(120, 100, 62, 0.18);
+  overflow: hidden;
+}
+.hud-progress i { display: block; height: 100%; border-radius: 3px; transition: width 0.35s ease; }
+.hud-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 7px;
+  font-size: 11px;
+  color: #6f6448;
+  letter-spacing: 0.2px;
+}
+.hud-tags .is-warn { color: #9a5b8a; }
+
+.hud-endturn {
+  position: absolute;
+  right: 18px;
+  bottom: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border: 1px solid rgba(150, 119, 68, 0.6);
+  border-radius: 10px;
+  background: linear-gradient(180deg, #f7e6bb, #dfc087);
+  color: #4f4127;
+  font-family: var(--serif);
+  font-size: 14px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  pointer-events: auto;
+  box-shadow: 0 12px 26px rgba(20, 34, 30, 0.28), inset 0 1px rgba(255, 255, 255, 0.7);
+  transition: transform 0.18s, box-shadow 0.18s;
+}
+.hud-endturn svg { width: 16px; height: 16px; }
+.hud-endturn:hover { transform: translateY(-1px); background: linear-gradient(180deg, #fdf1cd, #ead096); }
+
+.replay-dock {
+  position: absolute;
+  right: 18px;
+  top: 16px;
+  bottom: 16px;
+  width: 268px;
+  z-index: 9;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  pointer-events: auto;
+}
+.replay-dock .va-panel { flex: 0 0 auto; }
+
+/* 选目标态：主卡退到左下，浮层横贴到卡右侧（箭头指向左） */
+.card-popover.is-side {
+  width: 300px;
+  transform-origin: 0 50%;
+  transform: translateX(-4px) scale(0.96);
+}
+.card-popover.is-side::before {
+  top: 50%;
+  left: -9px;
+  margin: -9px 0 0;
+  border-left: 0;
+  border-right: 9px solid rgba(164, 136, 86, 0.85);
+  border-top: 9px solid transparent;
+  border-bottom: 9px solid transparent;
+}
+.card-popover.is-side .intent-banner {
+  box-shadow: inset 0 1px rgba(255, 255, 244, 0.75), inset 0 0 0 3px rgba(196, 148, 61, 0.12);
 }

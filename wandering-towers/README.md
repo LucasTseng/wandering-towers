@@ -1,67 +1,71 @@
-# 巫师飞塔 / The Wandering Towers（标准版数字化）
+# 巫师飞塔 · 开发说明（wandering-towers）
 
-> 基于 V4 开发总控文档的 TS 全栈实现。主线为 Three.js 三维版，可完整对局；服务端联机（Phase 5）仍为占位。
+> 本文件面向开发与部署；项目总览、界面截图与玩法说明见仓库根目录的 [README](../README.md)。
+
+基于 V4 开发总控文档的 TypeScript 全栈实现。主线为 Three.js 三维版，可完整对局；
+服务端联机（Phase 5）仍为占位。
 
 ## 项目构成
 
-仓库只有**一个可玩前端**（Three.js 三维版）；第一版 CSS 3D 前端已归档封存。
-
 | 包 | 名称 | 定位 | 启动命令 | 端口 |
 | --- | --- | --- | --- | --- |
-| `packages/client` | **`@wt/client`** | **主线**：Three.js WebGL 渲染 + 羊皮纸界面 | `pnpm dev` | **8008** |
-| `packages/engine` | `@wt/engine` | 规则引擎（前端与测试共用） | — | — |
+| `packages/client` | `@wt/client` | **主线**：React 18 + Vite + Three.js WebGL 渲染 + 羊皮纸界面 | `pnpm dev` | **8008** |
+| `packages/engine` | `@wt/engine` | 规则引擎（纯逻辑，无 IO / 无 DOM） | — | — |
 | `packages/shared` | `@wt/shared` | 类型 / 地图 / 牌库 / 法术定义 | — | — |
 | `packages/server` | `@wt/server` | 服务端权威层（Phase 5 占位） | — | — |
-| `archive/v1-css3d-client` | `@wt/v1-css3d-client` | **已封存**：第一版 CSS 3D 舞台，仅作参考 | 不启用 | — |
-
-> **版本沿革**：2026-11-24 起，原 `packages/client`（CSS 3D Transforms 实现）整体移入
-> `archive/v1-css3d-client` 封存，不再参与构建；原 `packages/three-client` 提升为 `packages/client`，
-> 成为唯一主线。归档说明见 [archive/README.md](archive/README.md)。
 
 主线的完整说明见 **[packages/client/README.md](packages/client/README.md)**
-（场景结构、回放机制、棋子比例与堆叠、已知边界）。
+（场景结构、回放机制、纵向卡牌层、棋子比例与堆叠、已知边界）。
 
-## 快速开始（Mac / Windows 通用）
+> **版本沿革**：2026-11-24 起，原 `packages/client`（CSS 3D Transforms 实现）先被归档，
+> 随后整份代码从仓库移除；原 `packages/three-client` 提升为 `packages/client`，成为唯一主线。
+> 第一版仍可从历史提交取回，说明见 [archive/README.md](archive/README.md)。
 
-需要 Node.js 20+ 与 pnpm 9.15.0（版本由 `packageManager` 固定）。
+## 快速开始
+
+需要 Node.js 20+（`.nvmrc` 固定为 20）与 pnpm 9.15.0（版本由 `packageManager` 固定）。
 
 ```bash
-# 启用 pnpm（任选其一）
 corepack enable && corepack prepare pnpm@9.15.0 --activate   # 推荐
-# 或 npm i -g pnpm
+# 或 npm i -g pnpm@9.15.0
 
-pnpm install          # 安装依赖（会同时补齐 Windows / macOS 两端的原生二进制）
-pnpm dev              # 启动前端 (http://localhost:8008)
-pnpm test             # 运行测试
-pnpm typecheck        # 类型检查
-pnpm lint             # 代码检查
-pnpm build            # 全仓构建
-pnpm replay:check     # 100 局随机对局不变量校验
+pnpm install
+pnpm dev        # http://localhost:8008
 ```
 
-### 平台安装提示
-- **Mac**：`brew install node@20` 或 `nvm install 20`（`.nvmrc` 已固定为 20）
-- **Windows**：安装 Node 20 官方包 → `npm i -g pnpm`（WSL2 可选非必须）
+### 常用命令
 
-## 两台机器共用同一个文件夹（Synology Drive 等同步盘）
+```bash
+pnpm dev           # 开发服务器（热更新）
+pnpm build         # 全仓构建
+pnpm typecheck     # TypeScript 检查
+pnpm test          # Vitest 全量（8 文件 / 89 例）
+pnpm test:engine   # 只跑规则引擎
+pnpm lint          # ESLint
+pnpm replay:check  # 随机对局回放一致性
+```
 
-**源码、文档、`pnpm-lock.yaml` 可以放心同步；`node_modules` 和构建产物不要跨机器同步。**
+## 双端（macOS / Windows）说明
 
-原因：Vite / Vitest 依赖 `esbuild`、`rollup` 的平台原生二进制，并且 pnpm 在 Windows 上用 junction、在 macOS 上用 symlink 组织 `node_modules`。把一台机器装好的 `node_modules` 同步到另一台，容易出现「找不到 darwin / win32 原生模块」或链接失效。
+两端使用**同一套命令与同一份锁文件**。仓库已经做了这些适配：
 
-推荐做法：
+| 机制 | 作用 |
+| --- | --- |
+| `.npmrc` → `node-linker=hoisted` | 两端安装结果一致；也避免同步盘上因残留空壳目录导致的链接失败 |
+| `pnpm.supportedArchitectures`（`current` + `win32` + `darwin`） | 一次安装即准备三平台的原生二进制，锁文件同时包含 esbuild / rollup 的 Windows 包 |
+| `.gitattributes` → `* text=auto eol=lf` | 统一 LF，避免 Windows 编辑器批量改成 CRLF |
+| `vitest` 关闭文件级并行 | Windows 上多 worker 并发写临时缓存会偶发 `EPERM` 并静默跳过用例 |
 
-1. 在 Synology Drive 客户端的同步任务里，把 `node_modules`、`dist`、`.vite`、`coverage`、`*.tsbuildinfo` 加入排除同步（项目已提供 `.gitignore`，供 git 忽略这些目录）。
-2. 每台机器各自执行一次 `pnpm install`。`pnpm-lock.yaml` 是全平台完整的锁文件，两端安装结果一致、互相不干扰。
-3. 作为兜底，根 `package.json` 的 `pnpm.supportedArchitectures` 会让 pnpm 在一次安装中同时准备 `win32` / `darwin` 的 x64 / arm64 原生二进制，并保留 `current`（当前平台）。即使偶尔同步了 `node_modules`，也不至于缺二进制；但链接方式仍不保证跨系统可用，换机器后建议重新执行一次 `pnpm install`（必要时 `pnpm install --force`）。
-4. `.gitattributes` 统一 LF 换行，避免 Windows 端编辑器把整仓文件改成 CRLF 造成两端文件反复抖动。
-5. `vitest.config.ts` 关闭了测试文件并行（`fileParallelism: false`）：Windows 上多个 worker 并发写同一个 vite-node 临时缓存文件会偶发 `EPERM`，并静默跳过部分测试文件；顺序执行更稳，Mac 上同样适用（仅略慢）。
+**不要跨机器同步 `node_modules`。** 里面有平台相关的原生二进制与链接结构，换机后重新 `pnpm install` 即可。
+如果确实用 Synology Drive / OneDrive 共享目录，建议把 `node_modules`、`dist`、`.vite`、`coverage` 排除同步。
 
-> 本机 Windows 实测：Node 22.22.2 / pnpm 9.15.0 下 `install`、`dev`、`test`、`typecheck`、`lint`、`build`、`replay:check` 全部可用；macOS 端使用同一套命令与同一份锁文件即可。
+Windows 补充：
 
-## 可选：Docker 部署
+- 未安装 pnpm 时：`npm i -g pnpm@9.15.0`
+- 路径过长会触发 Windows 260 字符限制，建议放在 `C:\dev\wandering-towers` 这类短路径下
+- PowerShell 与 Windows Terminal 均可，脚本不依赖 bash 专有语法
 
-本地开发无需 Docker；如需统一部署/CI：
+## Docker（可选）
 
 ```bash
 pnpm docker:build     # 构建镜像
@@ -78,13 +82,31 @@ wandering-towers/
     engine/        规则引擎（纯逻辑，无 IO）
     server/        服务端权威层（Phase 5 联机实装）
     client/        主线前端：React + Vite + Three.js（端口 8008）
-  archive/
-    v1-css3d-client/  已封存的第一版（React + CSS 3D Transforms），不参与构建
+  archive/         仅一份说明：第一版实现已从仓库移除
   docs/            开发文档体系（见 docs/README.md）
 ```
 
-详见 [docs/README.md](docs/README.md)。
+## 界面现状
 
-> **UI 迭代方向**：界面将从 340px 单列侧栏改为「Z 轴分层 + 四角 HUD」，
-> 设计见 [`docs/architecture/08-UI纵深交互方案.md`](docs/architecture/08-UI纵深交互方案.md)，
-> 原型 `docs/prototypes/depth-ui-demo.html`。当前代码仍为侧栏布局，尚未实施。
+界面已是「Z 轴分层 + 四角 HUD」，右侧栏已删除：
+
+- 手牌 3 张为前景 3D 卡面；点击后主卡抬升，下一步浮层贴在其正下方
+- 进入选巫师 / 选塔后，主卡退到左下并缩小，浮层横贴右侧，把棋盘中部让给点选
+- 法术 4 张收为左后方牌堆，悬停召至前景展开，手牌反向收拢
+- 魔法瓶为 3D 漂浮瓶位；左上铭牌合并轮次与行动；右上为玩家状态卡；右下结束回合
+
+设计与实施记录见 [`docs/architecture/08-UI纵深交互方案.md`](docs/architecture/08-UI纵深交互方案.md)，
+可运行原型见 [`docs/prototypes/depth-ui-demo.html`](docs/prototypes/depth-ui-demo.html)。
+
+尚未完成：键盘 / 读屏可达性、窄屏降级布局（TU.4）。
+
+## 文档
+
+从 [docs/README.md](docs/README.md) 进入文档地图。核心几份：
+
+| 文档 | 内容 |
+| --- | --- |
+| [开发设计文档-架构与实现基线](docs/开发设计文档-架构与实现基线.md) | 单一事实来源 |
+| [08-UI纵深交互方案](docs/architecture/08-UI纵深交互方案.md) | 纵深界面设计与实施记录 |
+| [00-开发任务总表](docs/00-开发任务总表.md) | 任务分解与 DoD |
+| [dev-log](docs/dev-log/) | 逐阶段开发日志 |

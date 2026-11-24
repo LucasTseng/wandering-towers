@@ -12,7 +12,7 @@
 - [architecture/01-技术架构与跨平台方案.md](architecture/01-技术架构与跨平台方案.md) — 技术选型 / Mac/Windows / Docker
 - [architecture/02-开发规范与提交约定.md](architecture/02-开发规范与提交约定.md) — 规范 / 规则口径红线 / 跨平台检查清单
 - [architecture/03-UI美化与3D塔体方案.md](architecture/03-UI美化与3D塔体方案.md) — 3D 塔/巫师 + 独立可缩放舞台区（Phase U，方案设计阶段）
-- [architecture/08-UI纵深交互方案.md](architecture/08-UI纵深交互方案.md) — ⭐ **UI 纵深交互（Depth UI）设计定稿**：Z 轴分层 / 卡下浮层 / 法术牌堆交换 / 特效清单 / 落地批次（尚未实施）
+- [architecture/08-UI纵深交互方案.md](architecture/08-UI纵深交互方案.md) — ⭐ **UI 纵深交互（Depth UI）**：Z 轴分层 / 卡下浮层 / 法术牌堆交换 / 特效清单（**P1+P2 已实施**，P3 待做）
 - [prototypes/depth-ui-demo.html](prototypes/depth-ui-demo.html) — 纵深交互可运行原型（单文件，`?demo=card`、`?demo=spell&instant=1` 预览态）
 - [dev-log/](dev-log/) — 逐任务开发日志（⚠️ Phase 2/3/4 历史日志存在高报进度，真实状态以基线文档 §13 为准）
 

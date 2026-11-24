@@ -1,7 +1,9 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import type { PlayerID } from '@wt/shared';
 import type { SceneCell, StageInteraction } from '../game/types';
 import { TowerScene } from '../scene/SceneController';
+import type { CardMode, CardView, PotionView } from '../scene/cardLayer';
 import type { TurnNotice } from '../containers/threeTypes';
 
 export interface StageApi {
@@ -45,15 +47,42 @@ function sceneSignature(cells: SceneCell[], interaction: StageInteraction, readO
   return sig;
 }
 
+export interface StageStatus {
+  round: number;
+  phaseLabel: string;
+  actionIndex: number;
+  playerId: PlayerID;
+  playerName: string;
+  playerColor: string;
+  inCastle: number;
+  totalWizards: number;
+  spellsLeft: number;
+  onBoard: number;
+  imprisoned: number;
+}
+
 interface ThreeStageProps {
   cells: SceneCell[];
   interaction: StageInteraction;
-  currentPlayerId: PlayerID;
-  playerName: string;
-  playerColor: string;
-  phaseLabel: string;
-  roundNumber: number;
-  actionIndex: number;
+  /** 纵深卡牌：手牌 3 张与法术牌堆 */
+  hand: readonly CardView[];
+  spells: readonly CardView[];
+  cardsMode: CardMode;
+  selectedCardId: string | null;
+  /** 进入「选巫师 / 选塔」的主卡：退到左下缩小，浮层改到卡右侧 */
+  targetingCardId?: string | null;
+  onCardSelect: (id: string) => void;
+  onCardHover?: (id: string | null) => void;
+  /** 贴在卡牌下缘的浮层（可空） */
+  popover?: ReactNode;
+  popoverAnchorId?: string | null;
+  status: StageStatus;
+  potions: readonly PotionView[];
+  /** 顶部居中：错误优先，其次意图提示 */
+  topCenter?: ReactNode;
+  onEndTurn?: (() => void) | null;
+  /** 回放面板（浮动停靠） */
+  replayPanel?: ReactNode;
   turnNotice: TurnNotice | null;
   /** 只读模式（回放）：禁止场景拾取并清空选中 */
   readOnly?: boolean;
@@ -68,12 +97,20 @@ export const ThreeStage = forwardRef<StageApi, ThreeStageProps>(function ThreeSt
   const {
     cells,
     interaction,
-    currentPlayerId,
-    playerName,
-    playerColor,
-    phaseLabel,
-    roundNumber,
-    actionIndex,
+    hand,
+    spells,
+    cardsMode,
+    selectedCardId,
+    targetingCardId = null,
+    onCardSelect,
+    onCardHover,
+    popover = null,
+    popoverAnchorId = null,
+    status,
+    potions,
+    topCenter = null,
+    onEndTurn = null,
+    replayPanel = null,
     turnNotice,
     readOnly = false,
     onReady,
@@ -91,6 +128,11 @@ export const ThreeStage = forwardRef<StageApi, ThreeStageProps>(function ThreeSt
   const onReadyRef = useRef(onReady);
   onReadyRef.current = onReady;
   const lastSignatureRef = useRef<string | null>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const onCardSelectRef = useRef(onCardSelect);
+  onCardSelectRef.current = onCardSelect;
+  const onCardHoverRef = useRef(onCardHover);
+  onCardHoverRef.current = onCardHover;
 
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
@@ -118,6 +160,8 @@ export const ThreeStage = forwardRef<StageApi, ThreeStageProps>(function ThreeSt
       reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
     });
     sceneRef.current = scene;
+    scene.onCardClick = (id: string) => onCardSelectRef.current(id);
+    scene.onCardHover = (id: string | null) => onCardHoverRef.current?.(id);
     let cancelled = false;
 
     scene
@@ -143,6 +187,54 @@ export const ThreeStage = forwardRef<StageApi, ThreeStageProps>(function ThreeSt
 
   useEffect(() => {
     if (!ready) return;
+    sceneRef.current?.setCards(hand, spells, cardsMode, selectedCardId, targetingCardId);
+  }, [hand, spells, cardsMode, selectedCardId, targetingCardId, ready]);
+
+  useEffect(() => {
+    if (!ready) return;
+    sceneRef.current?.setPotions(potions);
+  }, [potions, ready]);
+
+  // 浮层跟随卡牌投影：每帧读一次锚点，卡牌移动/镜头旋转都能贴住
+  useEffect(() => {
+    if (!popoverAnchorId) return;
+    let raf = 0;
+    const tick = (): void => {
+      raf = requestAnimationFrame(tick);
+      const el = popoverRef.current;
+      const scene = sceneRef.current;
+      const stage = stageRef.current;
+      if (!el || !scene || !stage) return;
+      const anchor = scene.getCardAnchor(popoverAnchorId);
+      if (!anchor) {
+        el.style.opacity = '0';
+        return;
+      }
+      el.style.opacity = '1';
+      const width = el.offsetWidth || 300;
+      const height = el.offsetHeight || 110;
+      const maxLeft = Math.max(8, stage.clientWidth - width - 8);
+      const maxTop = Math.max(8, stage.clientHeight - height - 8);
+
+      // 选目标态：主卡退到左下，浮层贴到卡右侧（横向排布），避免压住棋盘中部
+      const side = el.classList.contains('is-side');
+      if (side) {
+        const cardW = anchor.h * (166 / 249); // 卡牌宽高比 1.66 : 2.49
+        const left = anchor.x + cardW / 2 + 18;
+        el.style.left = `${Math.min(Math.max(left, 8), maxLeft)}px`;
+        const centerY = anchor.y - anchor.h / 2;
+        el.style.top = `${Math.min(Math.max(centerY - height / 2, 8), maxTop)}px`;
+      } else {
+        el.style.left = `${Math.min(Math.max(anchor.x - width / 2, 8), maxLeft)}px`;
+        el.style.top = `${Math.min(anchor.y + 22, maxTop)}px`;
+      }
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [popoverAnchorId]);
+
+  useEffect(() => {
+    if (!ready) return;
     const signature = sceneSignature(cells, interaction, readOnly);
     if (signature === lastSignatureRef.current) return;
     lastSignatureRef.current = signature;
@@ -162,25 +254,40 @@ export const ThreeStage = forwardRef<StageApi, ThreeStageProps>(function ThreeSt
         <div className="stage-vignette" />
         <div className="stage-grain" />
         <div className="stage-hud">
-          <div className="location-plaque">
+          <div className="hud-plaque">
             <div className="location-kicker">CLOUDFIELD · RAVENREALM</div>
             <div className="location-title">雾晨试炼场</div>
-            <div className="location-sub">
-              浮空棋盘 · 第 {roundNumber} 轮 · {phaseLabel}
+            <div className="hud-round">
+              第 {status.round} 轮 · 行动 {Math.min(status.actionIndex, 2)} / 2
             </div>
+            <div className="hud-phase">{status.phaseLabel}</div>
           </div>
 
-          <div className="turn-panel">
-            <div className="turn-head">
-              <span>当前行动</span>
-              <strong>{actionIndex} / 2</strong>
+          <div className="hud-top-center">{topCenter}</div>
+
+          <div className="hud-status">
+            <div className="hud-status-head">
+              <span className="hud-avatar" style={{ background: status.playerColor }} />
+              <div className="hud-status-copy">
+                <div className="hud-player">
+                  {status.playerId} · {status.playerName}
+                </div>
+                <div className="hud-goal">目标：{status.totalWizards} 名巫师进入鸦堡</div>
+              </div>
             </div>
-            <div className="action-pips">
-              <i className="action-pip is-on" />
-              <i className={actionIndex > 1 ? 'action-pip is-on' : 'action-pip'} />
+            <div className="hud-progress">
+              <i
+                style={{
+                  width: `${Math.round((status.inCastle / Math.max(1, status.totalWizards)) * 100)}%`,
+                  background: `linear-gradient(90deg, ${status.playerColor}, #d8a95c)`,
+                }}
+              />
             </div>
-            <div className="turn-caption" style={{ color: playerColor }}>
-              {currentPlayerId} · {playerName}
+            <div className="hud-tags">
+              <span>已进堡 {status.inCastle}</span>
+              <span>法术 {status.spellsLeft}</span>
+              <span>场上 {status.onBoard}</span>
+              {status.imprisoned > 0 && <span className="is-warn">封印 {status.imprisoned}</span>}
             </div>
           </div>
 
@@ -212,11 +319,6 @@ export const ThreeStage = forwardRef<StageApi, ThreeStageProps>(function ThreeSt
             </button>
           </div>
 
-          <div className="webgl-badge">
-            <span />
-            WEBGL 2 · PCF SOFT SHADOW
-          </div>
-
           <div className="stage-bottom">
             <div className="control-hint">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4">
@@ -226,7 +328,7 @@ export const ThreeStage = forwardRef<StageApi, ThreeStageProps>(function ThreeSt
               <i className="control-sep" />
               <span>滚轮缩放</span>
               <i className="control-sep" />
-              <span>点击棋子查看</span>
+              <span>悬停左后方法术牌堆</span>
             </div>
             <div className="legend">
               <span className="legend-item"><i className="legend-ring gold" />目标</span>
@@ -234,7 +336,24 @@ export const ThreeStage = forwardRef<StageApi, ThreeStageProps>(function ThreeSt
               <span className="legend-item"><i className="legend-ring teal" />纹章</span>
             </div>
           </div>
+
+          {onEndTurn && (
+            <button className="hud-endturn" type="button" onClick={onEndTurn} title="结束本回合（补牌并轮转到下一玩家）">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <path d="M5 12h14m-5-5 5 5-5 5" />
+              </svg>
+              结束回合
+            </button>
+          )}
         </div>
+
+        {replayPanel}
+
+        {popover && (
+          <div className={`card-popover${targetingCardId ? ' is-side' : ''}`} ref={popoverRef}>
+            {popover}
+          </div>
+        )}
 
         {turnNotice && (
           <div className="turn-notice" key={turnNotice.key} aria-live="polite">

@@ -10,7 +10,7 @@ const engineSrc = fileURLToPath(new URL('../engine/src', import.meta.url));
  *
  * 2026-11-24 起为本仓库主线：Three.js WebGL 场景 + 羊皮纸界面。
  * 规则引擎与类型仍来自 @wt/engine 与 @wt/shared。
- * 经典 CSS 3D 版已归档至 archive/v1-css3d-client（仅作参考，不参与构建）。
+ * 第一版（CSS 3D）已从仓库移除，仅保留 archive/README.md 的取回说明。
  */
 export default defineConfig({
   plugins: [react()],

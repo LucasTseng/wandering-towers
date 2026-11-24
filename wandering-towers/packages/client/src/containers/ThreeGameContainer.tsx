@@ -13,7 +13,7 @@ import type {
 } from '@wt/shared';
 import { RuleError } from '@wt/engine';
 import type { ExecuteResult } from '@wt/engine';
-import { MovementCardType, TurnPhase } from '@wt/shared';
+import { MovementCardType, PotionState as PS, TurnPhase } from '@wt/shared';
 import { clockwiseSpace, isWizardVisible, wizardsOfPlayer } from '@wt/engine';
 import { useGame } from '../game/useGame';
 import { useReplay } from '../game/useReplay';
@@ -23,11 +23,12 @@ import { deriveSceneCells, visibleWizardIdsOf, wizardSpaceIndexOf } from '../gam
 import { applyStress, readStressParams } from '../game/debug';
 import { EMPTY_INTERACTION } from '../game/types';
 import type { StageInteraction } from '../game/types';
-import { getCardTemplate } from '../game/cardHelper';
+import { cardLabel, getCardTemplate } from '../game/cardHelper';
+import { HIDDEN_SPELLS, SPELL_POTION_COST, SPELL_ZH_DESC, SPELL_ZH_NAME } from '../game/config';
+import type { CardMode, CardView, PotionView, PotionVisualState } from '../scene/cardLayer';
 import { playerName } from '../scene/pieces';
 import { TopBar } from '../components/TopBar';
-import { ThreeStage, type StageApi } from '../components/ThreeStage';
-import { HandPanel, PlayerPanel, PotionPanel, SpellPanel, EndTurnButton } from '../components/SidePanels';
+import { ThreeStage, type StageApi, type StageStatus } from '../components/ThreeStage';
 import { ReplayPanel } from '../components/ReplayPanel';
 import { LogDrawer, WinnerOverlay } from '../components/Overlays';
 import type { TurnNotice } from './threeTypes';
@@ -176,12 +177,48 @@ export function ThreeGameContainer() {
     setSliceStart(null);
   }, []);
 
+  /**
+   * 骰点锁定表：掷出的点数一旦记录，本回合内不可重掷。
+   * 取消/切换卡牌都不会清除它，只有「成功出牌」或「直接打出」才释放。
+   */
+  const lockedRollRef = useRef(new Map<CardID, { value: number; mode: 'WIZARD' | 'TOWER' }>());
+
+  const restoreLockedIntent = useCallback(
+    (cardId: CardID, roll: { value: number; mode: 'WIZARD' | 'TOWER' }) => {
+      setIntent(
+        roll.mode === 'WIZARD'
+          ? { type: 'PLAY_CARD_WIZARD', cardId, moveValue: roll.value, locked: true, chosenMode: 'WIZARD' }
+          : { type: 'PLAY_CARD_TOWER_PICK', cardId, moveValue: roll.value, locked: true, chosenMode: 'TOWER' },
+      );
+    },
+    [],
+  );
+
+  const releaseLockedRoll = useCallback((cardId: CardID) => {
+    lockedRollRef.current.delete(cardId);
+  }, []);
+
   // ---------- 手牌 ----------
   const handleCardClick = useCallback(
     (cardId: CardID) => {
       setError(null);
       const tmpl = getCardTemplate(state, cardId);
       if (!tmpl) return;
+
+      // 骰点已锁定：只能回到同一张牌的锁定态，不能重掷
+      const pending = lockedRollRef.current.get(cardId);
+      if (pending) {
+        restoreLockedIntent(cardId, pending);
+        setError(
+          `这张牌的骰点已锁定为 ${pending.value} 点：请点击要移动的${pending.mode === 'WIZARD' ? '巫师' : '塔'}，` +
+            '或使用「直接打出（放弃移动）」结束本次出牌',
+        );
+        return;
+      }
+      if (lockedRollRef.current.size > 0) {
+        setError('当前有一张牌已掷骰锁定，请先完成本次移动或直接打出，再选择其他卡牌');
+        return;
+      }
       const isDice = tmpl.moveValueMode === 'DICE';
       if (tmpl.type === MovementCardType.MOVE_WIZARD) {
         if (isDice) setIntent({ type: 'PLAY_CARD_DICE', cardId, tmpl, chosenMode: 'WIZARD' });
@@ -193,7 +230,7 @@ export function ThreeGameContainer() {
         setIntent({ type: 'PLAY_CARD_MODE_CHOICE', cardId, tmpl });
       }
     },
-    [state],
+    [state, restoreLockedIntent],
   );
 
   const chooseMode = useCallback(
@@ -225,26 +262,50 @@ export function ThreeGameContainer() {
 
   const rollDice = useCallback(() => {
     if (intent.type !== 'PLAY_CARD_DICE') return;
+    // 已有骰点则直接恢复，绝不重掷
+    const existing = lockedRollRef.current.get(intent.cardId);
+    if (existing) {
+      restoreLockedIntent(intent.cardId, existing);
+      return;
+    }
     const value = 1 + Math.floor(Math.random() * 6);
     const { cardId, chosenMode } = intent;
+    lockedRollRef.current.set(cardId, { value, mode: chosenMode });
     if (chosenMode === 'WIZARD') {
       setIntent({ type: 'PLAY_CARD_WIZARD', cardId, moveValue: value, locked: true, chosenMode });
     } else {
       setIntent({ type: 'PLAY_CARD_TOWER_PICK', cardId, moveValue: value, locked: true, chosenMode });
     }
-  }, [intent]);
+  }, [intent, restoreLockedIntent]);
 
-  const handleContinueNoTarget = useCallback(() => {
+  /**
+   * 强制结束本次出牌：即使还有合法目标也允许放弃移动。
+   * 引擎对「非法目标」的处理就是消耗行动（V2 §20.1），因此这里传一个必然无效的
+   * 目标 id，既不改规则也能保证任何时候都能走完这一步。
+   */
+  const FORCE_SKIP_ID = '__force_skip__';
+  const handleForceFinish = useCallback(() => {
     if (intent.type !== 'PLAY_CARD_WIZARD' && intent.type !== 'PLAY_CARD_TOWER_PICK') return;
-    const ok = safeDispatch(
-      castCmd(current, 'PLAY_CARD', {
-        cardId: intent.cardId,
-        resolvedMoveValue: intent.moveValue,
-        ...(intent.chosenMode ? { chosenMode: intent.chosenMode } : {}),
-      }),
-    );
-    if (ok) resetIntent();
-  }, [intent, current, safeDispatch, resetIntent]);
+    const base = {
+      cardId: intent.cardId,
+      resolvedMoveValue: intent.moveValue,
+      ...(intent.chosenMode ? { chosenMode: intent.chosenMode } : {}),
+    };
+    const ok =
+      intent.type === 'PLAY_CARD_WIZARD'
+        ? safeDispatch(castCmd(current, 'PLAY_CARD', { ...base, wizardId: FORCE_SKIP_ID as WizardID }))
+        : safeDispatch(
+            castCmd(current, 'PLAY_CARD', {
+              ...base,
+              towerSourceSpaceIndex: 0 as SpaceIndex,
+              pickedTowerId: FORCE_SKIP_ID as TowerID,
+            }),
+          );
+    if (ok) {
+      releaseLockedRoll(intent.cardId);
+      resetIntent();
+    }
+  }, [intent, current, safeDispatch, resetIntent, releaseLockedRoll]);
 
   // ---------- 棋盘点击 ----------
   const handleWizardClick = useCallback(
@@ -263,7 +324,10 @@ export function ThreeGameContainer() {
             ...(intent.chosenMode ? { chosenMode: intent.chosenMode } : {}),
           }),
         );
-        if (ok) resetIntent();
+        if (ok) {
+          releaseLockedRoll(intent.cardId);
+          resetIntent();
+        }
         return;
       }
       if (intent.type === 'CAST_SPELL_MOVE_WIZARD') {
@@ -319,7 +383,10 @@ export function ThreeGameContainer() {
             ...(intent.chosenMode ? { chosenMode: intent.chosenMode } : {}),
           }),
         );
-        if (ok) resetIntent();
+        if (ok) {
+          releaseLockedRoll(intent.cardId);
+          resetIntent();
+        }
       } else if (intent.type === 'DISCARD_REDRAW_FLOW') {
         const ok = safeDispatch(
           castCmd(current, 'DISCARD_REDRAW', {
@@ -482,6 +549,254 @@ export function ThreeGameContainer() {
 
   const spellsDisabled = finished || state.turnPhase === TurnPhase.ACTION_DONE;
 
+  /* ---------- 纵深卡牌：视图模型 ---------- */
+  const cardsDisabled = finished || state.turnPhase === TurnPhase.ACTION_DONE;
+
+  const handViews = useMemo<CardView[]>(() => {
+    const player = state.players[current];
+    if (!player) return [];
+    return player.hand.map((cardId) => {
+      const tmpl = getCardTemplate(state, cardId);
+      const isWizard = tmpl?.type === MovementCardType.MOVE_WIZARD;
+      const isTower = tmpl?.type === MovementCardType.MOVE_TOWER;
+      const kind = isWizard ? 'wizard' : isTower ? 'tower' : 'both';
+      const dice = tmpl?.moveValueMode !== 'FIXED';
+      return {
+        id: cardId,
+        kind,
+        badge: dice ? '骰' : String(tmpl?.fixedValue ?? '?'),
+        title: cardLabel(state, cardId),
+        sub: dice ? '掷骰决定步数' : `移动 ${tmpl?.fixedValue ?? '?'} 格`,
+        disabled: cardsDisabled,
+      } satisfies CardView;
+    });
+  }, [state, current, cardsDisabled]);
+
+  const spellViews = useMemo<CardView[]>(() => {
+    const player = state.players[current];
+    const maxSpells = state.config.spellSetup.maxSpellsPerTurn;
+    const remaining = maxSpells - (player?.spellsCastThisTurn ?? 0);
+    const fullPotions = player?.potionIds.filter((pid) => state.potions[pid]?.state === PS.FULL).length ?? 0;
+    return state.availableSpells
+      .filter((spellId) => !HIDDEN_SPELLS.has(spellId))
+      .map((spellId) => {
+        const cost = SPELL_POTION_COST[spellId] ?? 1;
+        const ready = remaining > 0 && fullPotions >= cost && !spellsDisabled;
+        return {
+          id: spellId,
+          kind: 'spell',
+          badge: null,
+          title: SPELL_ZH_NAME[spellId] ?? spellId,
+          sub: SPELL_ZH_DESC[spellId] ?? '',
+          disabled: !ready,
+        } satisfies CardView;
+      });
+  }, [state, current, spellsDisabled]);
+
+  /** 有 cardId 的意图 → 浮层贴在该卡下方；其余留在侧栏 */
+  const intentCardId = useMemo<string | null>(() => {
+    switch (intent.type) {
+      case 'PLAY_CARD_MODE_CHOICE':
+      case 'PLAY_CARD_DICE':
+      case 'PLAY_CARD_WIZARD':
+      case 'PLAY_CARD_TOWER_PICK':
+        return intent.cardId;
+      default:
+        return null;
+    }
+  }, [intent]);
+
+  /** 已经进入「选巫师 / 选塔」：主卡退到左下，浮层移到卡右侧，把棋盘中部让出来 */
+  const targetingCardId = useMemo<string | null>(() => {
+    switch (intent.type) {
+      case 'PLAY_CARD_WIZARD':
+      case 'PLAY_CARD_TOWER_PICK':
+        return intent.cardId;
+      default:
+        return null;
+    }
+  }, [intent]);
+
+  const [spellsOpen, setSpellsOpen] = useState(false);
+  const spellCloseTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (intentCardId) setSpellsOpen(false);
+  }, [intentCardId]);
+
+  useEffect(() => () => {
+    if (spellCloseTimer.current !== null) window.clearTimeout(spellCloseTimer.current);
+  }, []);
+
+  const handleCardHover = useCallback(
+    (id: string | null) => {
+      if (spellCloseTimer.current !== null) {
+        window.clearTimeout(spellCloseTimer.current);
+        spellCloseTimer.current = null;
+      }
+      if (id === null) {
+        spellCloseTimer.current = window.setTimeout(() => setSpellsOpen(false), 520);
+        return;
+      }
+      setSpellsOpen(spellViews.some((view) => view.id === id));
+    },
+    [spellViews],
+  );
+
+  const cardsMode: CardMode = spellsOpen && !intentCardId ? 'spells' : intentCardId ? 'card' : 'hand';
+
+  /* ---------- 舞台状态区与漂浮魔法瓶 ---------- */
+  const stageStatus = useMemo<StageStatus>(() => {
+    const player = state.players[current];
+    const wizards = (player?.wizardIds ?? [])
+      .map((id) => state.wizards[id])
+      .filter((wizard) => Boolean(wizard));
+    const inCastle = wizards.filter((wizard) => wizard?.state.mode === 'IN_CASTLE').length;
+    const onBoard = wizards.filter(
+      (wizard) => wizard?.state.mode === 'ON_GROUND' || wizard?.state.mode === 'ON_TOWER_TOP',
+    ).length;
+    const imprisoned = wizards.filter((wizard) => wizard?.state.mode === 'IMPRISONED').length;
+    return {
+      round: state.roundNumber,
+      phaseLabel,
+      actionIndex,
+      playerId: current,
+      playerName: playerName(current),
+      playerColor,
+      inCastle,
+      totalWizards: player?.wizardIds.length ?? 0,
+      spellsLeft: Math.max(0, state.config.spellSetup.maxSpellsPerTurn - (player?.spellsCastThisTurn ?? 0)),
+      onBoard,
+      imprisoned,
+    };
+  }, [state, current, phaseLabel, actionIndex, playerColor]);
+
+  const potionViews = useMemo<PotionView[]>(() => {
+    const player = state.players[current];
+    if (!player) return [];
+    const fake = import.meta.env.DEV && new URLSearchParams(window.location.search).get('uipreview') === 'potion';
+    const demoStates: PotionVisualState[] = ['FULL', 'FULL', 'FULL', 'EMPTY', 'SPENT', 'EMPTY'];
+    return player.potionIds.map((potionId, index) => ({
+      id: potionId,
+      state: fake
+        ? (demoStates[index] ?? 'EMPTY')
+        : ((state.potions[potionId]?.state ?? 'EMPTY') as PotionVisualState),
+      color: playerColor,
+    }));
+  }, [state, current, playerColor]);
+
+  const canEndTurn =
+    !finished &&
+    !isReplay &&
+    (state.turnPhase === TurnPhase.ACTION_1 ||
+      state.turnPhase === TurnPhase.ACTION_2 ||
+      state.turnPhase === TurnPhase.ACTION_DONE);
+
+  const handleEndTurn = useCallback(() => {
+    if (lockedRollRef.current.size > 0) {
+      setError('上一张牌已掷骰锁定：请先完成移动，或使用「直接打出（放弃移动）」');
+      return;
+    }
+    resetIntent();
+    safeDispatch(castCmd(current, 'END_TURN', {}));
+  }, [resetIntent, current]);
+
+  const handleCardSelect = useCallback(
+    (id: string) => {
+      const spell = spellViews.find((view) => view.id === id);
+      if (spell) {
+        if (spell.disabled) {
+          setError('该法术当前不可施放：满药水瓶不足，或本回合施法次数已用完');
+          return;
+        }
+        handleCastSpell(id as SpellID);
+        return;
+      }
+      const card = handViews.find((view) => view.id === id);
+      if (card?.disabled) {
+        setError('当前阶段不能出牌');
+        return;
+      }
+      handleCardClick(id as CardID);
+    },
+    [spellViews, handViews, handleCastSpell, handleCardClick],
+  );
+
+  /* 开发期预览：?uipreview=card 自动选中第一张手牌，便于核对贴卡浮层 */
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const preview = new URLSearchParams(window.location.search).get('uipreview');
+    if (preview === 'spell') {
+      setSpellsOpen(true);
+      return;
+    }
+    if (preview === 'target') {
+      // 选一张不走掷骰的「巫师 / 塔」单用途牌，直接进入选目标态
+      const single = handViews.find((view) => view.kind !== 'both' && view.badge !== '骰');
+      if (!single || intentCardId) return;
+      const timer = window.setTimeout(() => handleCardSelect(single.id), 1400);
+      return () => window.clearTimeout(timer);
+    }
+    if (preview !== 'card' && preview !== 'card2') return;
+    if (intentCardId) return;
+    const target = preview === 'card2' ? handViews[2] : handViews[0];
+    if (!target) return;
+    const timer = window.setTimeout(() => handleCardSelect(target.id), 1400);
+    return () => window.clearTimeout(timer);
+  }, [handViews, handleCardSelect, intentCardId]);
+
+  const replayDock =
+    isReplay && replay.snapshot ? (
+      <div className="replay-dock">
+        <ReplayPanel
+          state={replay.snapshot}
+          events={replay.events}
+          cursor={replay.cursor}
+          total={replay.total}
+          playing={replay.playing}
+          speed={replay.speed}
+          onSeek={replay.seek}
+          onTogglePlay={replay.toggle}
+          onSpeed={replay.setSpeed}
+          onExit={replay.close}
+        />
+      </div>
+    ) : null;
+
+  const intentBanner = (
+    <IntentBanner
+      intent={intent}
+      state={state}
+      current={current}
+      highlightCount={interaction.highlightWizards.size}
+      onRollDice={rollDice}
+      onCancel={resetIntent}
+      onChooseMode={chooseMode}
+      onForceFinish={handleForceFinish}
+      onDiscardRedrawNoMove={() => {
+        const ok = safeDispatch(castCmd(current, 'DISCARD_REDRAW', { moveTowerAfterRedraw: false }));
+        if (ok) resetIntent();
+      }}
+      onDiscardRedrawStart={() => {
+        setError(null);
+        setSliceStart(null);
+        setIntent({ type: 'DISCARD_REDRAW_FLOW' });
+      }}
+      finished={finished}
+    />
+  );
+
+  const topCenterNode = error ? (
+    <div className="hud-alert">
+      <span>{error}</span>
+      <button className="mini-button" type="button" onClick={() => setError(null)}>
+        知道了
+      </button>
+    </div>
+  ) : !intentCardId ? (
+    intentBanner
+  ) : null;
+
   return (
     <div className="app">
       <TopBar
@@ -501,114 +816,26 @@ export function ThreeGameContainer() {
           ref={stageApi}
           cells={cells}
           interaction={interaction}
-          currentPlayerId={current}
-          playerName={playerName(current)}
-          playerColor={playerColor}
-          phaseLabel={phaseLabel}
-          roundNumber={viewState.roundNumber}
-          actionIndex={actionIndex}
+          status={stageStatus}
+          potions={potionViews}
+          topCenter={topCenterNode}
+          onEndTurn={canEndTurn ? handleEndTurn : null}
+          replayPanel={replayDock}
+          hand={handViews}
+          spells={spellViews}
+          cardsMode={cardsMode}
+          selectedCardId={intentCardId}
+          targetingCardId={targetingCardId}
+          onCardSelect={handleCardSelect}
+          onCardHover={handleCardHover}
+          popover={intentCardId ? intentBanner : null}
+          popoverAnchorId={intentCardId}
           turnNotice={turnNotice}
           readOnly={isReplay}
           onReady={() => setStageReady(true)}
         />
 
-        <aside className="sidebar">
-          {error && (
-            <div className="error-banner">
-              {error}
-              <button className="mini-button" style={{ marginLeft: 8 }} onClick={() => setError(null)}>
-                知道了
-              </button>
-            </div>
-          )}
 
-          {isReplay && replay.snapshot ? (
-            <ReplayPanel
-              state={replay.snapshot}
-              events={replay.events}
-              cursor={replay.cursor}
-              total={replay.total}
-              playing={replay.playing}
-              speed={replay.speed}
-              onSeek={replay.seek}
-              onTogglePlay={replay.toggle}
-              onSpeed={replay.setSpeed}
-              onExit={replay.close}
-            />
-          ) : (
-            <>
-              <PlayerPanel
-                state={state}
-                playerId={current}
-                phaseLabel={phaseLabel}
-                actionIndex={actionIndex}
-                color={playerColor}
-              />
-
-              <IntentBanner
-                intent={intent}
-                state={state}
-                current={current}
-                highlightCount={interaction.highlightWizards.size}
-                onRollDice={rollDice}
-                onCancel={resetIntent}
-                onChooseMode={chooseMode}
-                onContinueNoTarget={handleContinueNoTarget}
-                onDiscardRedrawNoMove={() => {
-                  const ok = safeDispatch(castCmd(current, 'DISCARD_REDRAW', { moveTowerAfterRedraw: false }));
-                  if (ok) resetIntent();
-                }}
-                onDiscardRedrawStart={() => {
-                  setError(null);
-                  setSliceStart(null);
-                  setIntent({ type: 'DISCARD_REDRAW_FLOW' });
-                }}
-                finished={finished}
-              />
-
-              <HandPanel
-                state={state}
-                playerId={current}
-                selectedCardId={
-                  intent.type === 'PLAY_CARD_WIZARD' ||
-                  intent.type === 'PLAY_CARD_TOWER_PICK' ||
-                  intent.type === 'PLAY_CARD_MODE_CHOICE'
-                    ? intent.cardId
-                    : null
-                }
-                onCardClick={handleCardClick}
-                disabled={finished || state.turnPhase === TurnPhase.ACTION_DONE}
-              />
-
-              <PotionPanel state={state} playerId={current} color={playerColor} />
-
-              <SpellPanel
-                state={state}
-                playerId={current}
-                onCastSpell={handleCastSpell}
-                disabled={spellsDisabled}
-              />
-
-              {!finished &&
-                (state.turnPhase === TurnPhase.ACTION_1 ||
-                  state.turnPhase === TurnPhase.ACTION_2 ||
-                  state.turnPhase === TurnPhase.ACTION_DONE) && (
-                  <EndTurnButton
-                    onClick={() => {
-                      resetIntent();
-                      safeDispatch(castCmd(current, 'END_TURN', {}));
-                    }}
-                  />
-                )}
-
-              <div className="demo-footnote">
-                三维版与经典版共用同一套 @wt/engine 规则 · 渲染层独立
-                <br />
-                美术：程序化材质 + CC0 砂岩
-              </div>
-            </>
-          )}
-        </aside>
       </main>
 
       {!isReplay && (
@@ -667,7 +894,7 @@ function IntentBanner(props: {
   onRollDice: () => void;
   onCancel: () => void;
   onChooseMode: (mode: 'WIZARD' | 'TOWER') => void;
-  onContinueNoTarget: () => void;
+  onForceFinish: () => void;
   onDiscardRedrawNoMove: () => void;
   onDiscardRedrawStart: () => void;
 }) {
@@ -680,7 +907,7 @@ function IntentBanner(props: {
     onRollDice,
     onCancel,
     onChooseMode,
-    onContinueNoTarget,
+    onForceFinish,
     onDiscardRedrawNoMove,
     onDiscardRedrawStart,
   } = props;
@@ -760,12 +987,19 @@ function IntentBanner(props: {
   return (
     <div className={`intent-banner${locked ? ' is-locked' : ''}`}>
       <span className="intent-text">{intentPrompt(intent)}</span>
-      {noTarget ? (
-        <button className="mini-button is-primary" type="button" onClick={onContinueNoTarget} title="无合法目标，本牌作废并推进到下一步">
-          继续出牌（本牌作废）
+      {locked ? (
+        <button
+          className={`mini-button${noTarget ? ' is-primary' : ''}`}
+          type="button"
+          onClick={onForceFinish}
+          title={
+            noTarget
+              ? '没有合法目标：本牌作废，行动消耗'
+              : '放弃本次移动：本牌作废，行动消耗'
+          }
+        >
+          {noTarget ? '无合法目标 · 直接打出' : '直接打出（放弃移动）'}
         </button>
-      ) : locked ? (
-        <span style={{ color: '#9a5b3d', fontSize: 9 }}>已锁定</span>
       ) : (
         <button className="mini-button" type="button" onClick={onCancel}>
           取消
@@ -778,9 +1012,13 @@ function IntentBanner(props: {
 function intentPrompt(intent: UIIntent): string {
   switch (intent.type) {
     case 'PLAY_CARD_WIZARD':
-      return `巫师牌（${intent.moveValue} 格）：点击你要移动的己方可见巫师${intent.locked ? '（已掷出，不可取消）' : ''}`;
+      return intent.locked
+        ? `巫师 · 骰点 ${intent.moveValue} 已锁定：点击要移动的己方可见巫师`
+        : `巫师牌（${intent.moveValue} 格）：点击你要移动的己方可见巫师`;
     case 'PLAY_CARD_TOWER_PICK':
-      return `塔牌（${intent.moveValue} 格）：点击要移动的塔（该塔及以上整段移动）${intent.locked ? '（已掷出，不可取消）' : ''}`;
+      return intent.locked
+        ? `塔 · 骰点 ${intent.moveValue} 已锁定：点击要移动的塔（该塔及以上整段移动）`
+        : `塔牌（${intent.moveValue} 格）：点击要移动的塔（该塔及以上整段移动）`;
     case 'CAST_SPELL_MOVE_WIZARD':
       return '移动巫师：点击你要移动的己方巫师（顺时针 1 格）';
     case 'CAST_SPELL_MOVE_TOWER':
